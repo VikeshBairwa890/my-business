@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id         String     @id @default(uuid()) @db.Uuid
+  name       String
+  revision   Int        @default(0)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  users      User[]
+  sites      Site[]
+  workers    Worker[]
+  audit      Audit[]
+  requests   Request[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  name         String
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+  audit        Audit[]
+
+  @@map("users")
+}
+
+model Session {
+  tokenHash String   @id @map("token_hash")
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Site {
+  id                String       @id @default(uuid()) @db.Uuid
+  orgId             String       @map("org_id") @db.Uuid
+  name              String
+  ownerName         String       @map("owner_name")
+  phone             String       @default("")
+  address           String       @default("")
+  workType          String       @map("work_type")
+  pricing           String
+  contractAmount    BigInt       @map("contract_amount")
+  quantity          Decimal      @default(1) @db.Decimal(12, 3)
+  unit              String       @default("job")
+  unitRate          BigInt       @default(0) @map("unit_rate")
+  remainingEstimate BigInt       @default(0) @map("remaining_estimate")
+  status            String       @default("ONGOING")
+  startDate         DateTime     @map("start_date") @db.Date
+  endDate           DateTime?    @map("end_date") @db.Date
+  notes             String       @default("")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  organization      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  attendance        Attendance[]
+  entries           Entry[]
+
+  @@unique([orgId, id])
+  @@map("sites")
+}
+
+model Worker {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  name         String
+  phone        String       @default("")
+  skill        String
+  dailyRate    BigInt       @map("daily_rate")
+  overtimeRate BigInt       @map("overtime_rate")
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  attendance   Attendance[]
+  entries      Entry[]
+
+  @@unique([orgId, id])
+  @@map("workers")
+}
+
+model Attendance {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  siteId          String   @map("site_id") @db.Uuid
+  workerId        String   @map("worker_id") @db.Uuid
+  date            DateTime @db.Date
+  units           Decimal  @db.Decimal(3, 2)
+  overtimeMinutes Int      @map("overtime_minutes")
+  dailyRate       BigInt   @map("daily_rate")
+  overtimeRate    BigInt   @map("overtime_rate")
+  amount          BigInt
+  notes           String   @default("")
+  site            Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  worker          Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, siteId, workerId, date])
+  @@index([orgId, workerId, date])
+  @@map("attendance")
+}
+
+model Entry {
+  id            String    @id @default(uuid()) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  siteId        String    @map("site_id") @db.Uuid
+  workerId      String?   @map("worker_id") @db.Uuid
+  kind          String
+  date          DateTime  @db.Date
+  amount        BigInt
+  description   String
+  party         String    @default("")
+  mode          String    @default("CASH")
+  reference     String    @default("")
+  dueDate       DateTime? @map("due_date") @db.Date
+  linkedEntryId String?   @map("linked_entry_id") @db.Uuid
+  quantity      Decimal?  @db.Decimal(12, 3)
+  unit          String?
+  voidedAt      DateTime? @map("voided_at") @db.Timestamptz()
+  voidReason    String?   @map("void_reason")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  worker        Worker?   @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  linkedEntry   Entry?    @relation("LinkedEntries", fields: [linkedEntryId], references: [id], onDelete: SetNull)
+  childEntries  Entry[]   @relation("LinkedEntries")
+
+  @@unique([orgId, id])
+  @@index([orgId, siteId, date])
+  @@map("entries")
+}
+
+model Audit {
+  id           String       @id @default(uuid()) @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  action       String
+  entityId     String       @map("entity_id") @db.Uuid
+  beforeData   Json?        @map("before_data")
+  afterData    Json?        @map("after_data")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@map("audit")
+}
+
+model Request {
+  orgId        String       @map("org_id") @db.Uuid
+  key          String       @db.Uuid
+  hash         String
+  result       Json
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, key])
+  @@map("requests")
+}

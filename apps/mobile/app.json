@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "ThekaBook",
+    "slug": "thekabook",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "thekabook",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thekabook.app"
+    },
+    "android": {
+      "package": "com.thekabook.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "name": "ThekaBook"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "description": "Sites, people and every rupee. Contractor work ledger."
+    }
+  }
+}

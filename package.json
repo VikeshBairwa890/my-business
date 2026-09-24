@@ -1,0 +1,33 @@
+{
+  "name": "thekabook",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/api",
+    "apps/mobile"
+  ],
+  "scripts": {
+    "api": "npm run dev -w apps/api",
+    "mobile": "npm run start -w apps/mobile",
+    "web": "npm run web -w apps/mobile",
+    "test": "node --test apps/api/test/*.test.mjs",
+    "typecheck": "npm run typecheck -w apps/mobile"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "^153.0.0",
+    "playwright": "^1.63.0"
+  }
+}
