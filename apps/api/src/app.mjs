@@ -6,7 +6,15 @@ import { randomUUID, randomBytes, scrypt as _scrypt, timingSafeEqual, createHash
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { wages } from '../../../shared/finance.js';
+import { generateWorkerReportHtml } from './workerReportHtml.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
 const scrypt = promisify(_scrypt);
+
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 const hash = value => createHash('sha256').update(value).digest('hex');
 const id = z.uuid(), text = z.string().trim().min(1).max(200);
 const short = z.string().trim().max(300).default('');
@@ -64,10 +72,41 @@ async function session(db, user) {
 }
 export function createApp(db, { testing = false } = {}) {
   const app = express();
-  app.disable('x-powered-by'); app.use(helmet());
-  const allowed = (process.env.CORS_ORIGINS || 'http://localhost:8081,http://localhost:19006').split(',');
-  app.use(cors({ origin: (origin,cb) => cb(null, !origin || allowed.includes(origin)) }));
-  app.use(express.json({ limit: '100kb' }));
+  app.disable('x-powered-by');
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'unsafe-none' },
+  }));
+  const allowed = (process.env.CORS_ORIGINS || 'http://localhost:8081,http://localhost:19006')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  app.use(cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowed.includes(origin)) return cb(null, true);
+      try {
+        const u = new URL(origin);
+        if (
+          u.hostname === 'localhost' ||
+          u.hostname === '127.0.0.1' ||
+          u.hostname === '::1' ||
+          u.hostname.endsWith('.local') ||
+          !u.hostname.includes('.') ||
+          /^192\.168\.\d+\.\d+$/.test(u.hostname) ||
+          /^10\.\d+\.\d+\.\d+$/.test(u.hostname) ||
+          /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(u.hostname)
+        ) {
+          return cb(null, true);
+        }
+      } catch {}
+      if (!process.env.CORS_ORIGINS) return cb(null, true);
+      return cb(null, false);
+    },
+    credentials: true,
+  }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   if (!testing) app.use(rateLimit({ windowMs: 60000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.get('/health', async (_req,res) => { await db.query('SELECT 1'); res.json({ ok: true, database: 'postgresql' }); });
   const authLimiter = rateLimit({ windowMs: 15*60000, limit: 20, skip: () => testing, standardHeaders: 'draft-8', legacyHeaders: false });
@@ -87,19 +126,156 @@ export function createApp(db, { testing = false } = {}) {
     requireThat(user && await verify(b.password,user.password_hash), 'Email or password is incorrect',401);
     res.json(await session(db,user));
   });
+
+  // Public Report Viewer for WhatsApp Worker Monthly Slips
+  app.get('/report/worker/:workerId', async (req, res, next) => {
+    try {
+      const workerId = req.params.workerId;
+      const worker = await one(db, 'SELECT * FROM workers WHERE id=$1', [workerId]);
+      if (!worker) {
+        return res.status(404).send('<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;"><h2>Worker Report Not Found</h2><p>The requested worker attendance slip could not be found or may have been deleted.</p></body></html>');
+      }
+      const org = await one(db, 'SELECT id, name FROM organizations WHERE id=$1', [worker.org_id]);
+      const sites = (await db.query('SELECT id, name FROM sites WHERE org_id=$1', [worker.org_id])).rows;
+      
+      const now = new Date();
+      const year = parseInt(req.query.y, 10) || now.getFullYear();
+      const month = parseInt(req.query.m, 10) || (now.getMonth() + 1);
+      const lang = req.query.lang === 'en' ? 'en' : 'hi';
+
+      const countDays = new Date(year, month, 0).getDate();
+      const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+      const startDate = `${monthPrefix}-01`;
+      const endDate = `${monthPrefix}-${String(countDays).padStart(2, '0')}`;
+
+      const attendance = (await db.query(
+        'SELECT * FROM attendance WHERE org_id=$1 AND worker_id=$2 AND date >= $3 AND date <= $4 ORDER BY date ASC',
+        [worker.org_id, worker.id, startDate, endDate]
+      )).rows;
+
+      const entries = (await db.query(
+        'SELECT * FROM entries WHERE org_id=$1 AND worker_id=$2 AND date >= $3 AND date <= $4 AND voided_at IS NULL ORDER BY date ASC',
+        [worker.org_id, worker.id, startDate, endDate]
+      )).rows;
+
+      const html = generateWorkerReportHtml({
+        worker,
+        org,
+        sites,
+        attendance,
+        entries,
+        year,
+        month,
+        lang,
+      });
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(html);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.use(async (req,res,next) => {
-    const token = req.headers.authorization?.replace(/^Bearer /,'');
+    const token = req.headers.authorization?.replace(/^Bearer /,'') || (typeof req.query.token === 'string' ? req.query.token : undefined);
     requireThat(token && /^[a-f0-9]{64}$/.test(token),'Please sign in',401);
     const user = await one(db,'SELECT u.id,u.org_id,u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()',[hash(token)]);
     requireThat(user,'Session expired. Please sign in again.',401);
     req.user = user; req.token = token; next();
   });
   app.post('/auth/logout', async (req,res) => { await db.query('DELETE FROM sessions WHERE token_hash=$1',[hash(req.token)]); res.json({ok:true}); });
+  app.post('/documents/upload', async (req, res) => {
+    const { id: docId, name, mimeType, dataUrl } = req.body || {};
+    if (!docId || !dataUrl) {
+      return res.status(400).json({ error: 'Missing document id or dataUrl' });
+    }
+    try {
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      const base64Content = match ? match[2] : dataUrl;
+      const detectedMime = match ? match[1] : (mimeType || 'application/pdf');
+      const buffer = Buffer.from(base64Content, 'base64');
+      const filePath = path.join(uploadsDir, `${docId}.bin`);
+      const metaPath = path.join(uploadsDir, `${docId}.json`);
+      fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(metaPath, JSON.stringify({
+        id: docId,
+        orgId: req.user.org_id,
+        name: name || 'document.pdf',
+        mimeType: detectedMime,
+        size: buffer.length,
+        createdAt: new Date().toISOString(),
+      }));
+      res.json({ ok: true, id: docId });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to save document' });
+    }
+  });
+
+  app.get('/documents/:id', async (req, res) => {
+    const rawId = req.params.id;
+    const decodedId = decodeURIComponent(rawId);
+    let filePath = path.join(uploadsDir, `${rawId}.bin`);
+    let metaPath = path.join(uploadsDir, `${rawId}.json`);
+
+    if (!fs.existsSync(filePath)) {
+      // Try with decodedId
+      const testPath = path.join(uploadsDir, `${decodedId}.bin`);
+      if (fs.existsSync(testPath)) {
+        filePath = testPath;
+        metaPath = path.join(uploadsDir, `${decodedId}.json`);
+      }
+    }
+
+    if (!fs.existsSync(filePath) && fs.existsSync(uploadsDir)) {
+      // Search all metadata JSONs for matching document name or ID
+      try {
+        const files = fs.readdirSync(uploadsDir);
+        for (const f of files) {
+          if (f.endsWith('.json')) {
+            try {
+              const metaContent = JSON.parse(fs.readFileSync(path.join(uploadsDir, f), 'utf8'));
+              if (
+                metaContent.id === rawId ||
+                metaContent.id === decodedId ||
+                metaContent.name === rawId ||
+                metaContent.name === decodedId
+              ) {
+                const baseKey = f.replace(/\.json$/, '');
+                const candBin = path.join(uploadsDir, `${baseKey}.bin`);
+                if (fs.existsSync(candBin)) {
+                  filePath = candBin;
+                  metaPath = path.join(uploadsDir, f);
+                  break;
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    let meta = { name: decodedId || 'document.pdf', mimeType: 'application/pdf' };
+    if (fs.existsSync(metaPath)) {
+      try {
+        meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      } catch {}
+    }
+    const filename = meta.name || decodedId || 'document.pdf';
+    res.setHeader('Content-Type', meta.mimeType || 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  });
+
   app.get('/snapshot', async (req,res) => {
     const result = await db.transaction(async tx => {
       // Serialize snapshot with writes to avoid mixed financial revisions.
       await tx.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE',[req.user.org_id]);
-      const data = { organization: await one(tx,'SELECT id,name,revision FROM organizations WHERE id=$1',[req.user.org_id]), user:req.user };
+      const liveUser = await one(tx,'SELECT id,org_id,name,email,created_at FROM users WHERE id=$1',[req.user.id]);
+      const data = { organization: await one(tx,'SELECT id,name,revision FROM organizations WHERE id=$1',[req.user.org_id]), user: liveUser || req.user };
       for (const table of ['sites','workers','attendance','entries']) {
         data[table] = (await tx.query(`SELECT * FROM ${table} WHERE org_id=$1 ORDER BY id LIMIT 10001`,[req.user.org_id])).rows;
         requireThat(data[table].length <= 10000,'Account exceeds first-release report limit. Paginated reporting is required before adding more records.',413);
@@ -110,7 +286,7 @@ export function createApp(db, { testing = false } = {}) {
     res.json(result);
   });
   app.post('/commands', async (req,res) => {
-    const b = z.object({ key:id, action:z.enum(['site.create','site.update','worker.create','worker.update','attendance.save','entry.create','entry.void']), entity_id:id.optional(), data:z.record(z.string(),z.unknown()) }).strict().parse(req.body);
+    const b = z.object({ key:id, action:z.enum(['site.create','site.update','worker.create','worker.update','attendance.save','entry.create','entry.void','profile.update']), entity_id:id.optional(), data:z.record(z.string(),z.unknown()) }).strict().parse(req.body);
     const org = req.user.org_id, digest = hash(JSON.stringify({action:b.action,entity_id:b.entity_id,data:b.data}));
     const result = await db.transaction(async tx => {
       // One organization row lock prevents cross-site attendance and payment races.
@@ -156,6 +332,19 @@ export function createApp(db, { testing = false } = {}) {
           requireThat(Number(paid.n)+v.amount <= Number(bill.amount),'Payment exceeds bill balance');
         }
         after = await insert(tx,'entries',{id:entity,org_id:org,...v});
+      } else if (b.action === 'profile.update') {
+        const v = z.object({
+          name: z.string().trim().min(1).max(100).optional(),
+          organization_name: z.string().trim().min(1).max(100).optional(),
+        }).parse(b.data);
+        if (v.name) {
+          before = await one(tx, 'SELECT id,name FROM users WHERE id=$1', [req.user.id]);
+          await tx.query('UPDATE users SET name=$1 WHERE id=$2', [v.name, req.user.id]);
+        }
+        if (v.organization_name) {
+          await tx.query('UPDATE organizations SET name=$1 WHERE id=$2', [v.organization_name, org]);
+        }
+        after = { user_id: req.user.id, name: v.name, organization_name: v.organization_name };
       } else {
         requireThat(b.entity_id,'Entry ID required');
         const v = z.object({reason:z.string().trim().min(3).max(300)}).strict().parse(b.data);

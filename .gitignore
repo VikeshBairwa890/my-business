@@ -8,3 +8,7 @@ dist-verified/
 .env.local
 .data/
 *.log
+android/
+ios/
+tools/
+*.apk

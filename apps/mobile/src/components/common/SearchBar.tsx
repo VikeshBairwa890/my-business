@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TextInput, StyleSheet } from 'react-native';
+import { View, TextInput, StyleSheet, Platform } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../icons/AppIcon';
 
@@ -16,13 +16,18 @@ export function SearchBar({
 }: SearchBarProps) {
   return (
     <View style={styles.container}>
-      <AppIcon name="search-outline" size={18} color={Colors.textMuted} />
+      <AppIcon name="search-outline" size={18} color="#64748B" />
       <TextInput
-        style={styles.input}
+        style={[
+          styles.input,
+          Platform.OS === 'web'
+            ? ({ outlineStyle: 'none', outlineWidth: 0 } as any)
+            : undefined,
+        ]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={Colors.textSubtle}
+        placeholderTextColor="#94A3B8"
         autoCapitalize="none"
       />
     </View>
@@ -33,9 +38,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E2E8F0',
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
@@ -45,6 +50,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: '#0F172A',
+    backgroundColor: 'transparent',
   },
 });

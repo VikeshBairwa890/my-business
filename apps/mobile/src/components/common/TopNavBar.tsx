@@ -1,0 +1,326 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Platform,
+} from 'react-native';
+import { Colors } from '../../theme/colors';
+import { AppIcon } from '../icons/AppIcon';
+
+export interface TopNavBarProps {
+  /** Main page title */
+  title: string;
+  /** Subtitle / description / category */
+  subtitle?: string;
+  /** Left icon when not in back mode */
+  icon?: string;
+  /** Back navigation callback */
+  onBack?: () => void;
+  /** Optional text next to back button */
+  backText?: string;
+  /** Status badge or counter */
+  badge?:
+    | {
+        label: string;
+        tone?: 'green' | 'blue' | 'orange' | 'purple' | 'red' | 'gray';
+      }
+    | string;
+  /** Action buttons / components on the right side */
+  actions?: React.ReactNode;
+  /** Pull/tap refresh callback */
+  onRefresh?: () => void;
+  /** Refresh loading indicator */
+  refreshing?: boolean;
+  /** User initials or full name for avatar */
+  userInitials?: string;
+  /** Organization or company firm name */
+  organizationName?: string;
+  /** Callback to open dedicated profile page */
+  onOpenProfile?: () => void;
+  /** Callback to update company / user profile */
+  onUpdateProfile?: (values: { name?: string; organization_name?: string }) => Promise<void> | void;
+  /** User profile / logout callback */
+  onLogout?: () => void;
+  /** Container style overrides */
+  style?: any;
+}
+
+export function formatNameInitials(name?: string | null, fallback = ''): string {
+  if (!name || !name.trim()) return fallback;
+  const clean = name.trim();
+  if (
+    clean.toLowerCase() === 'thekabook' ||
+    clean.toLowerCase() === 'theka book' ||
+    clean.toLowerCase() === 'tb' ||
+    clean.toLowerCase() === 'admin'
+  ) {
+    return '';
+  }
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback;
+  if (parts.length === 1) {
+    // Single word name (e.g. "Subhash" -> 'S', "Vikesh" -> 'V')
+    return (parts[0][0] || fallback).toUpperCase();
+  }
+  // Multiple words (e.g. "Subhash Kumawat" -> "S" + "K" = "SK")
+  const first = parts[0][0] || '';
+  const last = parts[parts.length - 1][0] || '';
+  return (first + last).toUpperCase() || fallback;
+}
+
+export function TopNavBar({
+  title,
+  subtitle,
+  icon,
+  onBack,
+  backText,
+  badge,
+  actions,
+  userInitials,
+  organizationName,
+  onOpenProfile,
+  style,
+}: TopNavBarProps) {
+  // Format badge
+  const badgeObj =
+    typeof badge === 'string'
+      ? { label: badge, tone: 'blue' as const }
+      : badge;
+
+  const getBadgeStyle = (tone?: string) => {
+    switch (tone) {
+      case 'green':
+        return { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' };
+      case 'orange':
+        return { bg: '#FFEDD5', text: '#C2410C', border: '#FDBA74' };
+      case 'purple':
+        return { bg: '#F3E8FF', text: '#7E22CE', border: '#D8B4FE' };
+      case 'red':
+        return { bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' };
+      case 'gray':
+        return { bg: '#F1F5F9', text: '#475569', border: '#CBD5E1' };
+      default:
+        return { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' };
+    }
+  };
+
+  const badgeTheme = badgeObj ? getBadgeStyle(badgeObj.tone) : null;
+  const avatarText = formatNameInitials(userInitials || organizationName, '');
+
+  const handleAvatarPress = () => {
+    if (onOpenProfile) {
+      onOpenProfile();
+    }
+  };
+
+  return (
+    <View style={[styles.container, style]}>
+      {/* Left Area: Page Icon */}
+      <View style={styles.left}>
+        {icon ? (
+          <View style={styles.iconBadge}>
+            <AppIcon
+              name={icon}
+              size={18}
+              color="#FFFFFF"
+            />
+          </View>
+        ) : null}
+
+        {/* Title & Subtitle */}
+        <View style={styles.titleWrapper}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {badgeTheme && badgeObj ? (
+              <View
+                style={[
+                  styles.badgePill,
+                  {
+                    backgroundColor: badgeTheme.bg,
+                    borderColor: badgeTheme.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.badgePillText, { color: badgeTheme.text }]}
+                  numberOfLines={1}
+                >
+                  {badgeObj.label}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          {subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Right Area: Page-Specific Actions + User Avatar */}
+      <View style={styles.right}>
+        {actions ? <View style={styles.actionsBox}>{actions}</View> : null}
+
+        {/* Professional Profile Trigger Avatar */}
+        {onOpenProfile ? (
+          <Pressable
+            onPress={handleAvatarPress}
+            style={({ pressed }) => [
+              styles.avatarBtn,
+              pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+            ]}
+            accessibilityLabel="Open contractor profile & business settings"
+          >
+            {avatarText ? (
+              <Text style={styles.avatarText}>{avatarText}</Text>
+            ) : (
+              <AppIcon name="person" size={16} color="#2563EB" />
+            )}
+            <View style={styles.avatarStatusBadge} />
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    minHeight: 60,
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+        } as any)
+      : {}),
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    marginRight: 10,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F2851',
+    maxWidth: 120,
+  },
+  iconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#1E40AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  titleWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  badgePillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  subtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  actionsBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+    position: 'relative',
+  },
+  avatarText: {
+    color: '#1D4ED8',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  avatarStatusBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#16A34A',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+});
