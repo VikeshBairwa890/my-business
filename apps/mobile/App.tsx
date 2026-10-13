@@ -19,12 +19,7 @@ import { Button } from './src/components/common/Button';
 import { FormModal } from './src/ui';
 import { SiteFormModal } from './src/components/sites/SiteFormModal';
 import { AttendanceModal } from './src/components/attendance/AttendanceModal';
-import { MaterialBillModal } from './src/components/bills/MaterialBillModal';
-import { ExtraWorkModal } from './src/components/bills/ExtraWorkModal';
-import { ReceivePaymentModal } from './src/components/bills/ReceivePaymentModal';
-import { ExpenseBillModal } from './src/components/bills/ExpenseBillModal';
 import { WorkerFormModal } from './src/components/workers/WorkerFormModal';
-import { LabourPaymentModal } from './src/components/workers/LabourPaymentModal';
 import { VoidEntryModal } from './src/components/common/VoidEntryModal';
 
 // Pages
@@ -36,6 +31,13 @@ import { LabourPage } from './src/pages/Labour';
 import { HisabPage } from './src/pages/Hisab';
 import { ReportsPage } from './src/pages/Reports';
 import { ProfilePage } from './src/pages/Profile';
+import {
+  MaterialBillPage,
+  WagePaymentPage,
+  ReceivePaymentPage,
+  ExpenseBillPage,
+  ExtraWorkPage,
+} from './src/pages/Entries';
 
 // API & Helpers
 import { getToken, saveToken, request, commandKey } from './src/api';
@@ -64,38 +66,62 @@ function MainApp() {
   const getInitialRouteState = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const path = window.location.pathname;
+      if (path === '/entry/material') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'MATERIAL' };
+      }
+      if (path === '/entry/wage' || path === '/entry/wage-payment') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'WAGE_PAYMENT' };
+      }
+      if (path === '/entry/receipt' || path === '/entry/payment-in') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'RECEIPT' };
+      }
+      if (path === '/entry/expense') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'EXPENSE' };
+      }
+      if (path === '/entry/extra') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'EXTRA' };
+      }
       if (path === '/sites/new') {
-        return { tab: 'sites', selectedSiteId: null, isNewSite: true };
+        return { tab: 'sites', selectedSiteId: null, selectedWorkerId: null, isNewSite: true, activeEntryKind: null };
       }
       if (path.startsWith('/sites/') && path.length > 7) {
-        return { tab: 'sites', selectedSiteId: path.replace('/sites/', ''), isNewSite: false };
+        return { tab: 'sites', selectedSiteId: path.replace('/sites/', ''), selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
       if (path === '/sites') {
-        return { tab: 'sites', selectedSiteId: null, isNewSite: false };
+        return { tab: 'sites', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
       if (path === '/attendance') {
-        return { tab: 'attendance', selectedSiteId: null, isNewSite: false };
+        return { tab: 'attendance', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
+      }
+      if (path.startsWith('/team/') && path.length > 6) {
+        return { tab: 'team', selectedSiteId: null, selectedWorkerId: path.replace('/team/', ''), isNewSite: false, activeEntryKind: null };
+      }
+      if (path.startsWith('/labour/') && path.length > 8) {
+        return { tab: 'team', selectedSiteId: null, selectedWorkerId: path.replace('/labour/', ''), isNewSite: false, activeEntryKind: null };
       }
       if (path === '/team' || path === '/labour') {
-        return { tab: 'team', selectedSiteId: null, isNewSite: false };
+        return { tab: 'team', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
       if (path === '/ledger' || path === '/hisab') {
-        return { tab: 'ledger', selectedSiteId: null, isNewSite: false };
+        return { tab: 'ledger', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
       if (path === '/reports') {
-        return { tab: 'reports', selectedSiteId: null, isNewSite: false };
+        return { tab: 'reports', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
       if (path === '/profile') {
-        return { tab: 'profile', selectedSiteId: null, isNewSite: false };
+        return { tab: 'profile', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
     }
-    return { tab: 'home', selectedSiteId: null, isNewSite: false };
+    return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
   };
 
   const initialRoute = useRef(getInitialRouteState()).current;
   const [tab, setTab] = useState(initialRoute.tab);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(initialRoute.selectedSiteId);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(initialRoute.selectedWorkerId);
   const [isNewSite, setIsNewSite] = useState<boolean>(initialRoute.isNewSite);
+  const [activeEntryKind, setActiveEntryKind] = useState<string | null>(initialRoute.activeEntryKind);
+  const [activeEntryParams, setActiveEntryParams] = useState<{ siteId?: string; workerId?: string; bill?: Row } | null>(null);
 
   const [form, setForm] = useState<FormSpec | null>(null);
   const [busy, setBusy] = useState(false);
@@ -259,14 +285,19 @@ function MainApp() {
     newTab: string,
     urlPath?: string,
     siteId: string | null = null,
-    newSite = false
+    newSite = false,
+    workerId: string | null = null,
+    entryKind: string | null = null
   ) {
     if (newTab !== tab) {
       tabHistoryRef.current = [...tabHistoryRef.current.filter((t) => t !== newTab), newTab];
     }
     setTab(newTab);
     setSelectedSiteId(siteId);
+    setSelectedWorkerId(workerId);
     setIsNewSite(newSite);
+    setActiveEntryKind(entryKind);
+    if (!entryKind) setActiveEntryParams(null);
     setError('');
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -276,9 +307,21 @@ function MainApp() {
           ? '/sites/new'
           : siteId
             ? `/sites/${siteId}`
-            : newTab === 'home'
-              ? '/'
-              : `/${newTab}`);
+            : workerId
+              ? `/team/${workerId}`
+              : entryKind === 'MATERIAL'
+                ? '/entry/material'
+                : entryKind === 'WAGE_PAYMENT'
+                  ? '/entry/wage'
+                  : entryKind === 'RECEIPT'
+                    ? '/entry/receipt'
+                    : entryKind === 'EXPENSE'
+                      ? '/entry/expense'
+                      : entryKind === 'EXTRA'
+                        ? '/entry/extra'
+                        : newTab === 'home'
+                          ? '/'
+                          : `/${newTab}`);
       if (window.location.pathname !== targetUrl) {
         window.history.pushState(null, '', targetUrl);
       }
@@ -295,10 +338,20 @@ function MainApp() {
         return true;
       }
 
+      // 1b. If viewing an entry page, go back to overview
+      if (activeEntryKind) {
+        setActiveEntryKind(null);
+        setActiveEntryParams(null);
+        navigate('home', '/', null, false, null, null);
+        return true;
+      }
+
       // 2. If creating new site, go back to sites list
       if (isNewSite) {
         setIsNewSite(false);
         setSelectedSiteId(null);
+        setSelectedWorkerId(null);
+        setActiveEntryKind(null);
         setTab('sites');
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.history.pushState(null, '', '/sites');
@@ -309,6 +362,7 @@ function MainApp() {
       // 3. If viewing a specific site detail, go back to sites list
       if (selectedSiteId) {
         setSelectedSiteId(null);
+        setActiveEntryKind(null);
         setTab('sites');
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.history.pushState(null, '', '/sites');
@@ -316,9 +370,20 @@ function MainApp() {
         return true;
       }
 
+      // 3b. If viewing a specific worker detail in labour/team, go back to labour list
+      if (tab === 'team' && selectedWorkerId) {
+        setSelectedWorkerId(null);
+        setActiveEntryKind(null);
+        setTab('team');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.history.pushState(null, '', '/team');
+        }
+        return true;
+      }
+
       // 4. If in profile screen, go back to home tab
       if (tab === 'profile') {
-        navigate('home', '/', null, false);
+        navigate('home', '/', null, false, null, null);
         return true;
       }
 
@@ -327,7 +392,7 @@ function MainApp() {
         const prevStack = tabHistoryRef.current.filter((t) => t !== tab);
         const prevTab = prevStack.length > 0 ? prevStack[prevStack.length - 1] : 'home';
         tabHistoryRef.current = prevStack.length > 0 ? prevStack : ['home'];
-        navigate(prevTab, prevTab === 'home' ? '/' : `/${prevTab}`, null, false);
+        navigate(prevTab, prevTab === 'home' ? '/' : `/${prevTab}`, null, false, null, null);
         return true;
       }
 
@@ -357,7 +422,7 @@ function MainApp() {
       onHardwareBackPress
     );
     return () => backSub.remove();
-  }, [form, isNewSite, selectedSiteId, tab, lang]);
+  }, [form, isNewSite, selectedSiteId, selectedWorkerId, activeEntryKind, tab, lang]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -367,38 +432,98 @@ function MainApp() {
           setTab('sites');
           setIsNewSite(true);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
+        } else if (path === '/entry/material') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('MATERIAL');
+        } else if (path === '/entry/wage' || path === '/entry/wage-payment') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('WAGE_PAYMENT');
+        } else if (path === '/entry/receipt' || path === '/entry/payment-in') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('RECEIPT');
+        } else if (path === '/entry/expense') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('EXPENSE');
+        } else if (path === '/entry/extra') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('EXTRA');
         } else if (path.startsWith('/sites/') && path.length > 7) {
           setTab('sites');
           setIsNewSite(false);
           setSelectedSiteId(path.replace('/sites/', ''));
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else if (path === '/sites') {
           setTab('sites');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else if (path === '/attendance') {
           setTab('attendance');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
+        } else if (path.startsWith('/team/') && path.length > 6) {
+          setTab('team');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(path.replace('/team/', ''));
+          setActiveEntryKind(null);
+        } else if (path.startsWith('/labour/') && path.length > 8) {
+          setTab('team');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(path.replace('/labour/', ''));
+          setActiveEntryKind(null);
         } else if (path === '/team' || path === '/labour') {
           setTab('team');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else if (path === '/ledger' || path === '/hisab') {
           setTab('ledger');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else if (path === '/reports') {
           setTab('reports');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else if (path === '/profile') {
           setTab('profile');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         } else {
           setTab('home');
           setIsNewSite(false);
           setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind(null);
         }
       };
       window.addEventListener('popstate', onPopState);
@@ -413,7 +538,7 @@ function MainApp() {
     } else if (targetTab === 'hisab') {
       actualTab = 'ledger';
     }
-    navigate(actualTab, actualTab === 'home' ? '/' : `/${actualTab}`, null, false);
+    navigate(actualTab, actualTab === 'home' ? '/' : `/${actualTab}`, null, false, null);
   }
 
   async function handleCreateNewSite(values: Record<string, string>) {
@@ -460,7 +585,7 @@ function MainApp() {
     }
   }
 
-  const openEntryModal = (
+  const openEntryPage = (
     kind: string,
     siteId?: string,
     workerId?: string,
@@ -474,7 +599,61 @@ function MainApp() {
       setToast(lang === 'hi' ? 'कृपया पहले एक मजदूर (Labour) जोड़ें' : 'Please add a worker first');
       return;
     }
-    openForm(entryForm(data, kind, siteId, workerId, bill));
+    setActiveEntryParams({ siteId, workerId, bill });
+    let url = '/entry/material';
+    if (kind === 'WAGE_PAYMENT') url = '/entry/wage';
+    else if (kind === 'RECEIPT') url = '/entry/receipt';
+    else if (kind === 'EXPENSE') url = '/entry/expense';
+    else if (kind === 'EXTRA') url = '/entry/extra';
+
+    navigate('home', url, null, false, null, kind);
+  };
+
+  async function handleSaveEntry(
+    kind: string,
+    values: Record<string, string>,
+    siteId?: string,
+    workerId?: string,
+    bill?: Row
+  ) {
+    if (busy || !data) return;
+    setBusy(true);
+    setError('');
+    try {
+      const spec = entryForm(data, kind, siteId, workerId, bill);
+      const body = {
+        action: spec.action,
+        entity_id: commandKey(),
+        data: spec.transform(values),
+      };
+      const signature = JSON.stringify(body);
+      if (pendingRef.current?.signature !== signature) {
+        pendingRef.current = { signature, key: commandKey() };
+      }
+      await request('/commands', token, {
+        ...body,
+        key: pendingRef.current.key,
+      });
+      pendingRef.current = null;
+      setToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully');
+      await refresh();
+      setActiveEntryKind(null);
+      setActiveEntryParams(null);
+      navigate('home', '/', null, false, null, null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const openEntryModal = (
+    kind: string,
+    siteId?: string,
+    workerId?: string,
+    bill?: Row
+  ) => {
+    openEntryPage(kind, siteId, workerId, bill);
   };
 
   const openAttendanceModal = (
@@ -582,6 +761,79 @@ function MainApp() {
             onBack={() => navigate('sites', '/sites', null, false)}
             onSave={handleCreateNewSite}
           />
+        ) : activeEntryKind === 'MATERIAL' && data ? (
+          <MaterialBillPage
+            data={data}
+            busy={busy}
+            error={error}
+            siteId={activeEntryParams?.siteId}
+            bill={activeEntryParams?.bill}
+            onBack={() => navigate('home', '/', null, false, null, null)}
+            onSave={(vals) =>
+              handleSaveEntry('MATERIAL', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
+            }
+            onRefresh={() => refresh()}
+            refreshing={refreshing}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        ) : activeEntryKind === 'WAGE_PAYMENT' && data ? (
+          <WagePaymentPage
+            data={data}
+            busy={busy}
+            error={error}
+            siteId={activeEntryParams?.siteId}
+            workerId={activeEntryParams?.workerId}
+            onBack={() => navigate('home', '/', null, false, null, null)}
+            onSave={(vals) =>
+              handleSaveEntry('WAGE_PAYMENT', vals, activeEntryParams?.siteId, activeEntryParams?.workerId)
+            }
+            onRefresh={() => refresh()}
+            refreshing={refreshing}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        ) : activeEntryKind === 'RECEIPT' && data ? (
+          <ReceivePaymentPage
+            data={data}
+            busy={busy}
+            error={error}
+            siteId={activeEntryParams?.siteId}
+            onBack={() => navigate('home', '/', null, false, null, null)}
+            onSave={(vals) =>
+              handleSaveEntry('RECEIPT', vals, activeEntryParams?.siteId)
+            }
+            onRefresh={() => refresh()}
+            refreshing={refreshing}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        ) : activeEntryKind === 'EXPENSE' && data ? (
+          <ExpenseBillPage
+            data={data}
+            busy={busy}
+            error={error}
+            siteId={activeEntryParams?.siteId}
+            bill={activeEntryParams?.bill}
+            onBack={() => navigate('home', '/', null, false, null, null)}
+            onSave={(vals) =>
+              handleSaveEntry('EXPENSE', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
+            }
+            onRefresh={() => refresh()}
+            refreshing={refreshing}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
+        ) : activeEntryKind === 'EXTRA' && data ? (
+          <ExtraWorkPage
+            data={data}
+            busy={busy}
+            error={error}
+            siteId={activeEntryParams?.siteId}
+            onBack={() => navigate('home', '/', null, false, null, null)}
+            onSave={(vals) =>
+              handleSaveEntry('EXTRA', vals, activeEntryParams?.siteId)
+            }
+            onRefresh={() => refresh()}
+            refreshing={refreshing}
+            onOpenProfile={() => handleNavigate('profile')}
+          />
         ) : (
           <>
             {tab === 'home' && (
@@ -592,7 +844,7 @@ function MainApp() {
                 onOpenSite={(sId) => navigate('sites', `/sites/${sId}`, sId, false)}
                 onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
                 onOpenAttendance={() => openAttendanceModal()}
-                onOpenEntry={(kind) => openEntryModal(kind)}
+                onOpenEntry={(kind) => openEntryPage(kind)}
                 onNavigateTab={handleNavigate}
                 onUpdateProfile={handleUpdateProfile}
                 onLogout={handleLogout}
@@ -628,6 +880,10 @@ function MainApp() {
             {tab === 'team' && (
               <LabourPage
                 data={data}
+                selectedWorkerId={selectedWorkerId}
+                onSelectWorker={(wId) =>
+                  navigate('team', wId ? `/team/${wId}` : '/team', null, false, wId)
+                }
                 onOpenWorkerModal={(w) => openForm(workerForm(w))}
                 onOpenPaymentModal={(wId) =>
                   openEntryModal('WAGE_PAYMENT', undefined, wId)
@@ -695,71 +951,6 @@ function MainApp() {
         />
       ) : form && form.action === 'attendance.save' && data ? (
         <AttendanceModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'entry.create' && form.title.toLowerCase().includes('material') && data ? (
-        <MaterialBillModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'entry.create' && (form.title.toLowerCase().includes('expense') || form.title.toLowerCase().includes('kharcha')) && data ? (
-        <ExpenseBillModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'entry.create' && form.title.toLowerCase().includes('extra') && data ? (
-        <ExtraWorkModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'entry.create' && (form.title.toLowerCase().includes('client payment') || form.title.toLowerCase().includes('receipt')) && data ? (
-        <ReceivePaymentModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'entry.create' && (form.title.toLowerCase().includes('labour payment') || form.title.toLowerCase().includes('advance') || form.title.toLowerCase().includes('wage')) && data ? (
-        <LabourPaymentModal
           key={form.action + (form.entity_id || '')}
           spec={form}
           data={data}

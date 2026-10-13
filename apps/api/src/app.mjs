@@ -29,7 +29,7 @@ const siteSchema = z.object({ name: text, owner_name: text, phone: short, addres
   status: z.enum(['UPCOMING','ONGOING','PAUSED','COMPLETED']).default('ONGOING'),
   start_date: date, end_date: date.nullable().default(null), notes: z.string().max(4000).default('')
 }).strict().refine(x => !x.end_date || x.end_date >= x.start_date, 'End date must follow start date');
-const workerSchema = z.object({ name: text, phone: short, skill: text, daily_rate: amount, overtime_rate: amount, active: z.boolean().default(true) }).strict();
+const workerSchema = z.object({ name: text, phone: short, skill: text, daily_rate: amount, overtime_rate: amount, active: z.boolean().default(true), photo: z.string().default('') }).strict();
 const attendanceSchema = z.object({ site_id: id, worker_id: id, date,
   units: z.union([z.literal(0), z.literal(0.5), z.literal(1)]),
   overtime_minutes: z.number().int().min(0).max(960), notes: short

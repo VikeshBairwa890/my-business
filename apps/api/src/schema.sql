@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS workers (
  id uuid PRIMARY KEY, org_id uuid NOT NULL REFERENCES organizations(id), name text NOT NULL,
  phone text NOT NULL DEFAULT '', skill text NOT NULL, daily_rate bigint NOT NULL CHECK(daily_rate >= 0),
  overtime_rate bigint NOT NULL CHECK(overtime_rate >= 0), active boolean NOT NULL DEFAULT true,
+ photo text NOT NULL DEFAULT '',
  created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(org_id,id)
 );
 CREATE TABLE IF NOT EXISTS attendance (

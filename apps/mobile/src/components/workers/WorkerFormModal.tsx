@@ -12,12 +12,14 @@ import {
   Platform,
   useWindowDimensions,
   Linking,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../icons/AppIcon';
 import { FormSpec, Row, Snapshot } from '../../types';
 import { money, workerSummary } from '../../finance';
+import { useLanguage } from '../../i18n';
 
 export interface WorkerFormModalProps {
   spec: FormSpec;
@@ -65,6 +67,7 @@ export function WorkerFormModal({
   onOpenAttendanceModal,
   asPage = false,
 }: WorkerFormModalProps) {
+  const { lang } = useLanguage();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const isEdit = spec.action === 'worker.update' || !!worker;
@@ -93,6 +96,58 @@ export function WorkerFormModal({
   const [phone, setPhone] = useState<string>(
     String(spec.initial.phone || activeWorker?.phone || '')
   );
+  const [photo, setPhoto] = useState<string>(
+    String(spec.initial.photo || activeWorker?.photo || '')
+  );
+
+  const handlePickImage = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (uploadEvent) => {
+          const rawDataUrl = uploadEvent.target?.result as string;
+          if (rawDataUrl) {
+            const img = new (window as any).Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const maxDim = 320;
+              let w = img.width;
+              let h = img.height;
+              if (w > h) {
+                if (w > maxDim) {
+                  h = Math.round((h * maxDim) / w);
+                  w = maxDim;
+                }
+              } else {
+                if (h > maxDim) {
+                  w = Math.round((w * maxDim) / h);
+                  h = maxDim;
+                }
+              }
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, w, h);
+                const compressed = canvas.toDataURL('image/jpeg', 0.85);
+                setPhoto(compressed);
+              } else {
+                setPhoto(rawDataUrl);
+              }
+            };
+            img.src = rawDataUrl;
+          }
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    }
+  };
 
   // Skill state
   const initialSkillStr = String(spec.initial.skill || activeWorker?.skill || 'Painter');
@@ -220,6 +275,7 @@ export function WorkerFormModal({
       daily_rate: String(dailyNum),
       overtime_rate: String(otNum),
       active: active ? 'true' : 'false',
+      photo: photo.trim(),
     });
   };
 
@@ -373,6 +429,65 @@ export function WorkerFormModal({
             <View>
               <Text style={styles.sectionTitle}>Personal Details</Text>
               <Text style={styles.sectionSubtitle}>Worker name and mobile number</Text>
+            </View>
+          </View>
+
+          {/* Worker Photo Upload */}
+          <View style={styles.photoUploadContainer}>
+            <View style={styles.photoPreviewBox}>
+              {photo ? (
+                <Image source={{ uri: photo }} style={styles.photoPreviewImg} />
+              ) : (
+                <View style={styles.photoEmptyPlaceholder}>
+                  <AppIcon name="camera-outline" size={24} color={Colors.primary} />
+                  <Text style={styles.photoEmptyText}>
+                    {lang === 'hi' ? 'फ़ोटो नहीं' : 'No Photo'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.photoUploadInfoCol}>
+              <Text style={styles.photoUploadTitle}>
+                {lang === 'hi' ? 'कारीगर की फ़ोटो (ID कार्ड हेतु)' : 'Worker Photo (for ID Card)'}
+              </Text>
+              <Text style={styles.photoUploadSub}>
+                {lang === 'hi'
+                  ? 'आधिकारिक पहचान पत्र (ID Card) व हाजिरी के लिए'
+                  : 'Used on CR80 ID Card and profile'}
+              </Text>
+
+              <View style={styles.photoActionBtnsRow}>
+                <Pressable
+                  onPress={handlePickImage}
+                  style={({ pressed }) => [
+                    styles.photoPickBtn,
+                    pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  <AppIcon name="cloud-upload-outline" size={14} color="#FFFFFF" />
+                  <Text style={styles.photoPickBtnText}>
+                    {photo
+                      ? (lang === 'hi' ? 'फ़ोटो बदलें' : 'Change Photo')
+                      : (lang === 'hi' ? 'फ़ोटो अपलोड करें' : 'Upload Photo')}
+                  </Text>
+                </Pressable>
+
+                {photo ? (
+                  <Pressable
+                    onPress={() => setPhoto('')}
+                    style={({ pressed }) => [
+                      styles.photoRemoveBtn,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <AppIcon name="trash-outline" size={13} color="#EF4444" />
+                    <Text style={styles.photoRemoveBtnText}>
+                      {lang === 'hi' ? 'हटाएं' : 'Remove'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           </View>
 
@@ -1585,5 +1700,94 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+
+  /* Photo Upload */
+  photoUploadContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  photoPreviewBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 2,
+    borderColor: '#C7D2FE',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoPreviewImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoEmptyPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  photoEmptyText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  photoUploadInfoCol: {
+    flex: 1,
+    gap: 3,
+  },
+  photoUploadTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  photoUploadSub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  photoActionBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  photoPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#0F2851',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+  },
+  photoPickBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  photoRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  photoRemoveBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });

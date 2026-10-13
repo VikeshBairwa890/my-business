@@ -9,6 +9,7 @@ import {
   Linking,
   useWindowDimensions,
   BackHandler,
+  Image,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -21,10 +22,13 @@ import { TopNavBar } from '../../components/common/TopNavBar';
 import { Snapshot, Row } from '../../types';
 import { money, workerSummary } from '../../finance';
 import { WorkerDetailPage } from './WorkerDetailPage';
+import { WorkerIdCardModal } from '../../components/workers/WorkerIdCardModal';
 import { useLanguage } from '../../i18n';
 
 export interface LabourPageProps {
   data: Snapshot;
+  selectedWorkerId?: string | null;
+  onSelectWorker?: (workerId: string | null) => void;
   onOpenWorkerModal: (worker?: Row) => void;
   onOpenPaymentModal: (workerId: string) => void;
   onOpenProfile?: () => void;
@@ -75,6 +79,8 @@ function getSkillIcon(skill: string = ''): string {
 
 export function LabourPage({
   data,
+  selectedWorkerId: controlledWorkerId,
+  onSelectWorker,
   onOpenWorkerModal,
   onOpenPaymentModal,
   onOpenProfile,
@@ -83,15 +89,30 @@ export function LabourPage({
 }: LabourPageProps) {
   const { t, lang } = useLanguage();
   const [search, setSearch] = useState('');
-  const [selectedWorker, setSelectedWorker] = useState<Row | null>(null);
+  const [internalWorkerId, setInternalWorkerId] = useState<string | null>(null);
+  const [idCardWorker, setIdCardWorker] = useState<Row | null>(null);
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
+
+  const activeWorkerId = controlledWorkerId !== undefined ? controlledWorkerId : internalWorkerId;
+  const selectedWorker = useMemo(() => {
+    if (!activeWorkerId) return null;
+    return data.workers.find((w) => w.id === activeWorkerId) || null;
+  }, [data.workers, activeWorkerId]);
+
+  const handleSelectWorker = (wId: string | null) => {
+    if (onSelectWorker) {
+      onSelectWorker(wId);
+    } else {
+      setInternalWorkerId(wId);
+    }
+  };
 
   // Handle Android back button when viewing worker detail
   useEffect(() => {
     if (!selectedWorker) return;
     const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setSelectedWorker(null);
+      handleSelectWorker(null);
       return true;
     });
     return () => backSub.remove();
@@ -183,13 +204,13 @@ export function LabourPage({
       <WorkerDetailPage
         worker={selectedWorker}
         data={data}
-        onBack={() => setSelectedWorker(null)}
+        onBack={() => handleSelectWorker(null)}
         onOpenPaymentModal={(wId) => {
-          setSelectedWorker(null);
+          handleSelectWorker(null);
           onOpenPaymentModal(wId);
         }}
         onOpenWorkerModal={(w) => {
-          setSelectedWorker(null);
+          handleSelectWorker(null);
           onOpenWorkerModal(w);
         }}
       />
@@ -291,7 +312,7 @@ export function LabourPage({
               return (
                 <Pressable
                   key={w.id}
-                  onPress={() => setSelectedWorker(w)}
+                  onPress={() => handleSelectWorker(w.id)}
                   style={({ pressed }) => [
                     styles.workerRowItem,
                     pressed && styles.workerRowItemPressed,
@@ -301,9 +322,13 @@ export function LabourPage({
                   {/* Left Side: Avatar Image + Name + Designation & Rate */}
                   <View style={styles.workerRowLeft}>
                     <View style={[styles.avatarBox, { backgroundColor: avatarTheme.bg }]}>
-                      <Text style={[styles.avatarText, { color: avatarTheme.text }]}>
-                        {getInitials(w.name)}
-                      </Text>
+                      {w.photo ? (
+                        <Image source={{ uri: w.photo }} style={styles.avatarImg} />
+                      ) : (
+                        <Text style={[styles.avatarText, { color: avatarTheme.text }]}>
+                          {getInitials(w.name)}
+                        </Text>
+                      )}
                       <View
                         style={[
                           styles.statusDotRing,
@@ -344,12 +369,27 @@ export function LabourPage({
                     </View>
                   </View>
 
-                  {/* Right Side: View Icon Button */}
+                  {/* Right Side: ID Pass & View Buttons */}
                   <View style={styles.workerRowRight}>
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation?.();
-                        setSelectedWorker(w);
+                        setIdCardWorker(w);
+                      }}
+                      style={({ pressed }) => [
+                        styles.idCardActionBtn,
+                        pressed && styles.viewActionBtnPressed,
+                      ]}
+                      accessibilityLabel={`ID card for ${w.name}`}
+                    >
+                      <AppIcon name="id-card" size={13} color="#475569" />
+                      <Text style={styles.idCardActionBtnText}>{lang === 'hi' ? 'कार्ड' : 'Card'}</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        handleSelectWorker(w.id);
                       }}
                       style={({ pressed }) => [
                         styles.viewActionBtn,
@@ -357,7 +397,7 @@ export function LabourPage({
                       ]}
                       accessibilityLabel={`View details for ${w.name}`}
                     >
-                      <AppIcon name="eye-outline" size={16} color="#0F2851" />
+                      <AppIcon name="eye-outline" size={15} color="#0F2851" />
                       <Text style={styles.viewActionBtnText}>{t('view', 'View')}</Text>
                     </Pressable>
                   </View>
@@ -380,6 +420,13 @@ export function LabourPage({
           </View>
         </View>
       </ScrollView>
+
+      <WorkerIdCardModal
+        visible={!!idCardWorker}
+        worker={idCardWorker}
+        data={data}
+        onClose={() => setIdCardWorker(null)}
+      />
     </View>
   );
 }
@@ -581,6 +628,28 @@ const styles = StyleSheet.create({
     borderColor: '#BBF7D0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  idCardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  idCardActionBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    resizeMode: 'cover',
   },
   viewActionBtn: {
     flexDirection: 'row',

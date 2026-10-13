@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Linking,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
@@ -19,7 +20,7 @@ import { useLanguage } from '../../i18n';
 export interface WorkerDetailPageProps {
   worker: Row;
   data: Snapshot;
-  onBack: () => void;
+  onBack?: () => void;
   onOpenPaymentModal: (workerId: string) => void;
   onOpenWorkerModal: (worker: Row) => void;
 }
@@ -92,6 +93,7 @@ export function WorkerDetailPage({
   onOpenWorkerModal,
 }: WorkerDetailPageProps) {
   const { t, lang } = useLanguage();
+  const isHi = lang === 'hi';
   const [activeTab, setActiveTab] = useState<PageTab>('OVERVIEW');
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -162,7 +164,7 @@ export function WorkerDetailPage({
   const handleCall = () => {
     if (worker?.phone) {
       const cleaned = worker.phone.replace(/[^0-9+]/g, '');
-      if (cleaned) Linking.openURL(`tel:${cleaned}`).catch(() => {});
+      if (cleaned) Linking.openURL(`tel:${cleaned}`).catch(() => { });
     }
   };
 
@@ -196,9 +198,13 @@ export function WorkerDetailPage({
         <View style={[styles.heroCard, isDesktop && styles.heroCardDesktop]}>
           <View style={styles.heroTop}>
             <View style={[styles.avatar, { backgroundColor: avatarTheme.bg }]}>
-              <Text style={[styles.avatarText, { color: avatarTheme.text }]}>
-                {getInitials(worker.name)}
-              </Text>
+              {worker.photo ? (
+                <Image source={{ uri: worker.photo }} style={styles.avatarImg} />
+              ) : (
+                <Text style={[styles.avatarText, { color: avatarTheme.text }]}>
+                  {getInitials(worker.name)}
+                </Text>
+              )}
               <View style={[styles.statusDot, { backgroundColor: worker.active ? '#22C55E' : '#94A3B8' }]} />
             </View>
             <View style={styles.heroInfo}>
@@ -457,6 +463,7 @@ export function WorkerDetailPage({
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
     </SafeAreaView>
   );
 }
@@ -466,8 +473,14 @@ const styles = StyleSheet.create({
   topBarWrapper: { backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', width: '100%' },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
   topBarDesktop: { maxWidth: 860, alignSelf: 'center', width: '100%' },
-  backBtn: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
   topBarTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
+
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+    resizeMode: 'cover',
+  },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#0F2851' },
   heroWrapper: { backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', width: '100%' },

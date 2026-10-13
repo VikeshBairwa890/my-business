@@ -27,8 +27,8 @@ export function workerForm(w?:Row):FormSpec {
     fields:[{key:'name',label:'Full name'},{key:'phone',label:'Mobile number',numeric:true},{key:'skill',label:'Skill / role',placeholder:'Painter, mason, helper…'},
       {key:'daily_rate',label:'Daily wage (₹)',numeric:true},{key:'overtime_rate',label:'Overtime per hour (₹)',numeric:true},
       {key:'active',label:'Worker status',options:[{value:'true',label:'Active'},{value:'false',label:'Inactive'}]}],
-    initial:{name:w?.name||'',phone:w?.phone||'',skill:w?.skill||'Painter',daily_rate:rupees(w?.daily_rate),overtime_rate:rupees(w?.overtime_rate),active:String(w?.active??true)},
-    transform:v=>({...v,daily_rate:paise(v.daily_rate),overtime_rate:paise(v.overtime_rate),active:v.active==='true'})};
+    initial:{name:w?.name||'',phone:w?.phone||'',skill:w?.skill||'Painter',daily_rate:rupees(w?.daily_rate),overtime_rate:rupees(w?.overtime_rate),active:String(w?.active??true),photo:w?.photo||''},
+    transform:v=>({...v,daily_rate:paise(v.daily_rate),overtime_rate:paise(v.overtime_rate),active:v.active==='true',photo:v.photo||''})};
 }
 export function attendanceForm(data:Snapshot, siteId?:string, workerId?:string, existing?:Row):FormSpec {
   return {...base('attendance.save',existing?'Correct attendance':'Mark attendance','One full day maximum across sites. Corrections require a reason.'),

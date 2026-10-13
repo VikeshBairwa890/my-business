@@ -1475,3 +1475,337 @@ export async function downloadSiteDocument(
   }
 }
 
+/**
+ * Generates and prints/shares an Official Karigar ID Card PDF (Standard CR80 Size)
+ */
+export async function printWorkerIdCardAndGatePassPdf(
+  data: Snapshot,
+  worker: Row,
+  selectedSiteId?: string,
+  validUntil?: string,
+  lang: string = 'en'
+) {
+  const isHi = lang === 'hi';
+  const orgName = data.organization?.name || 'Authorized Contractor Services';
+  const contractorName = data.user?.name || 'Site Incharge';
+  const workerCode = `TK-W-${String(worker.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+
+  const site = selectedSiteId && selectedSiteId !== 'ALL'
+    ? data.sites.find((s) => s.id === selectedSiteId)
+    : data.sites[0];
+  const siteName = site ? site.name : (isHi ? 'समस्त अधिकृत साइट्स' : 'All Authorized Sites');
+
+  const expiryStr = validUntil || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString(isHi ? 'hi-IN' : 'en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const initials = worker.name ? worker.name.trim().split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase() : 'W';
+
+  const html = `<!DOCTYPE html>
+<html lang="${isHi ? 'hi' : 'en'}">
+<head>
+  <meta charset="utf-8" />
+  <title>Labour ID Card - ${escape(worker.name)}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 15mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: #F8FAFC;
+      color: #0F172A;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Standard CR80 PVC ID Card (Standard 54mm x 85.6mm proportions) */
+    .id-card-badge {
+      width: 310px;
+      height: 490px;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .lanyard-notch {
+      width: 44px;
+      height: 7px;
+      background: #E2E8F0;
+      border-radius: 4px;
+      margin: 8px auto 6px;
+    }
+
+    .card-header-band {
+      background: #1E293B;
+      color: #FFFFFF;
+      padding: 9px 14px;
+      text-align: center;
+    }
+    .firm-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .card-type-tag {
+      font-size: 8.5px;
+      color: #94A3B8;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      margin-top: 2px;
+      text-transform: uppercase;
+    }
+    .gold-divider {
+      height: 2.5px;
+      background: #F59E0B;
+      width: 100%;
+    }
+
+    .card-body {
+      padding: 12px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .photo-frame {
+      width: 76px;
+      height: 76px;
+      border-radius: 38px;
+      background: #F8FAFC;
+      border: 2px solid #E2E8F0;
+      display: flex;
+      align-items: center;
+      justifyContent: center;
+      position: relative;
+      margin-bottom: 8px;
+      overflow: visible;
+    }
+    .photo-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 38px;
+      object-fit: cover;
+    }
+    .avatar-initials {
+      font-size: 26px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .verified-mark {
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      background: #16A34A;
+      color: #FFFFFF;
+      font-size: 9px;
+      font-weight: 900;
+      padding: 2px 5px;
+      border-radius: 8px;
+      border: 1.5px solid #FFFFFF;
+    }
+
+    .worker-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 3px;
+    }
+    .skill-pill {
+      display: inline-block;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      color: #475569;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    .info-table td {
+      padding: 4.5px 6px;
+      border-bottom: 1px dashed #F1F5F9;
+      font-size: 11px;
+      text-align: left;
+    }
+    .col-key {
+      color: #64748B;
+      font-weight: 600;
+      width: 38%;
+      font-size: 9.5px;
+    }
+    .col-val {
+      color: #1E293B;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .sign-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: auto;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    .seal-box {
+      border: 1px solid #CBD5E1;
+      background: #F8FAFC;
+      padding: 2px 7px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .seal-text {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #475569;
+      letter-spacing: 0.4px;
+    }
+    .seal-sub {
+      font-size: 6.5px;
+      font-weight: 700;
+      color: #D97706;
+    }
+    .sign-box {
+      width: 100px;
+      text-align: center;
+    }
+    .sign-line {
+      width: 100%;
+      height: 1px;
+      background: #CBD5E1;
+      margin-bottom: 3px;
+    }
+    .sign-label {
+      font-size: 8px;
+      font-weight: 600;
+      color: #94A3B8;
+    }
+
+    .barcode-strip {
+      width: 100%;
+      background: #F8FAFC;
+      border: 1px solid #F1F5F9;
+      border-radius: 6px;
+      padding: 4px;
+      text-align: center;
+    }
+    .barcode-pattern {
+      font-family: monospace;
+      letter-spacing: 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .security-note {
+      font-size: 6.5px;
+      font-weight: 600;
+      color: #94A3B8;
+      letter-spacing: 0.4px;
+    }
+
+    .print-caption {
+      margin-top: 16px;
+      font-size: 11px;
+      color: #94A3B8;
+      text-align: center;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="id-card-badge">
+    <div class="lanyard-notch"></div>
+    <div class="card-header-band">
+      <div class="firm-name">${escape(orgName)}</div>
+      <div class="card-type-tag">${isHi ? 'कारीगर पहचान पत्र • LABOUR IDENTITY CARD' : 'LABOUR IDENTITY CARD • OFFICIAL BADGE'}</div>
+    </div>
+    <div class="gold-divider"></div>
+
+    <div class="card-body">
+      <div class="photo-frame">
+        ${worker.photo
+          ? `<img src="${worker.photo}" class="photo-img" />`
+          : `<div class="avatar-initials">${escape(initials)}</div>`
+        }
+        <div class="verified-mark">✓</div>
+      </div>
+
+      <div class="worker-name">${escape(worker.name)}</div>
+      <div class="skill-pill">${escape(worker.skill || (isHi ? 'कुशल कारीगर' : 'Skilled Worker'))}</div>
+
+      <table class="info-table">
+        <tr>
+          <td class="col-key">${isHi ? 'आईडी नंबर' : 'ID NUMBER'}:</td>
+          <td class="col-val" style="font-family:monospace; font-weight:700; color:#2563EB;">${escape(workerCode)}</td>
+        </tr>
+        <tr>
+          <td class="col-key">${isHi ? 'मोबाइल' : 'PHONE'}:</td>
+          <td class="col-val">${escape(worker.phone || (isHi ? 'उपलब्ध नहीं' : 'Not Provided'))}</td>
+        </tr>
+        <tr>
+          <td class="col-key">${isHi ? 'कार्य स्थल' : 'SITE'}:</td>
+          <td class="col-val">${escape(siteName)}</td>
+        </tr>
+        <tr>
+          <td class="col-key">${isHi ? 'ठेकेदार' : 'CONTRACTOR'}:</td>
+          <td class="col-val">${escape(contractorName)}</td>
+        </tr>
+        <tr>
+          <td class="col-key">${isHi ? 'वैधता' : 'VALID UPTO'}:</td>
+          <td class="col-val" style="color:#1E293B; font-weight:700;">${escape(expiryStr)}</td>
+        </tr>
+      </table>
+
+      <div class="sign-row">
+        <div class="seal-box">
+          <div class="seal-text">THEKABOOK</div>
+          <div class="seal-sub">VERIFIED</div>
+        </div>
+        <div class="sign-box">
+          <div class="sign-line"></div>
+          <div class="sign-label">${isHi ? 'अधिकृत हस्ताक्षर' : 'Authorized Signature'}</div>
+        </div>
+      </div>
+
+      <div class="barcode-strip">
+        <div class="barcode-pattern">|||| | ||||| || |||| |||</div>
+        <div class="security-note">SECURITY AUTH • CR80 STANDARD</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="print-caption">
+    Official Standard CR80 Labour Identity Card • Generated via ThekaBook Digital System
+  </div>
+</body>
+</html>`;
+
+  await printOrShareHtml(html, `Labour_ID_Card_${worker.name.replace(/\s+/g, '_')}`);
+}
