@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../icons/AppIcon';
 import { Row, Snapshot } from '../../types';
 import { useLanguage } from '../../i18n';
-import { printWorkerIdCardAndGatePassPdf } from '../../report';
+import { printWorkerIdCardAndGatePassPdf, shareWorkerIdCard } from '../../report';
 
 export interface WorkerIdCardModalProps {
   visible: boolean;
@@ -36,6 +36,7 @@ export function WorkerIdCardModal({
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const [busy, setBusy] = useState(false);
+  const [sharingWhatsApp, setSharingWhatsApp] = useState(false);
 
   // Auto-detect worker's assigned site from their latest attendance or active site
   const assignedSite = useMemo(() => {
@@ -98,36 +99,19 @@ export function WorkerIdCardModal({
   };
 
   const handleShareWhatsApp = async () => {
-    const text = isHi
-      ? `*🪪 आधिकारिक कारीगर पहचान पत्र (Labour ID Card)*\n\n` +
-        `👤 *नाम:* ${worker.name}\n` +
-        `🛠️ *पद / हुनर:* ${worker.skill || 'मजदूर'}\n` +
-        `🏷️ *आईडी कोड:* ${workerCode}\n` +
-        `📞 *मोबाइल:* ${worker.phone || 'N/A'}\n` +
-        `🏗️ *कार्य स्थल:* ${siteDisplayName}\n` +
-        `🏢 *फर्म:* ${orgName} (${contractorName})\n` +
-        `📅 *जारी दिनांक:* ${todayStr}\n` +
-        `⏳ *वैधता:* ${validUntilStr} तक\n\n` +
-        `_ThekaBook Verified Digital Labour ID System_`
-      : `*🪪 OFFICIAL LABOUR IDENTITY CARD*\n\n` +
-        `👤 *Worker Name:* ${worker.name}\n` +
-        `🛠️ *Trade / Skill:* ${worker.skill || 'General Labour'}\n` +
-        `🏷️ *Worker ID:* ${workerCode}\n` +
-        `📞 *Phone:* ${worker.phone || 'N/A'}\n` +
-        `🏗️ *Work Site:* ${siteDisplayName}\n` +
-        `🏢 *Contractor:* ${orgName} (${contractorName})\n` +
-        `📅 *Issue Date:* ${todayStr}\n` +
-        `⏳ *Valid Upto:* ${validUntilStr}\n\n` +
-        `_ThekaBook Verified Digital Labour ID System_`;
-
-    if (Platform.OS === 'web') {
-      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(url, '_blank');
-    } else {
-      await Share.share({
-        message: text,
-        title: `${worker.name} - ID Card`,
-      });
+    try {
+      setSharingWhatsApp(true);
+      await shareWorkerIdCard(
+        data,
+        worker,
+        assignedSite?.id,
+        validUntilStr,
+        lang
+      );
+    } catch (err: any) {
+      console.error('Failed to share ID Card on WhatsApp:', err);
+    } finally {
+      setSharingWhatsApp(false);
     }
   };
 
@@ -266,19 +250,31 @@ export function WorkerIdCardModal({
           <View style={styles.footer}>
             <Pressable
               onPress={handleShareWhatsApp}
-              style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+              disabled={sharingWhatsApp || busy}
+              style={({ pressed }) => [
+                styles.shareBtn,
+                (sharingWhatsApp || busy) && { opacity: 0.7 },
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+              ]}
             >
-              <AppIcon name="logo-whatsapp" size={18} color="#FFFFFF" />
-              <Text style={styles.shareBtnText}>
-                {isHi ? 'व्हाट्सएप भेजें' : 'WhatsApp'}
-              </Text>
+              {sharingWhatsApp ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <AppIcon name="logo-whatsapp" size={18} color="#FFFFFF" />
+                  <Text style={styles.shareBtnText}>
+                    {isHi ? 'व्हाट्सएप भेजें' : 'WhatsApp'}
+                  </Text>
+                </>
+              )}
             </Pressable>
 
             <Pressable
               onPress={handlePrintPdf}
-              disabled={busy}
+              disabled={busy || sharingWhatsApp}
               style={({ pressed }) => [
                 styles.printBtn,
+                (busy || sharingWhatsApp) && { opacity: 0.7 },
                 pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
               ]}
             >
@@ -286,9 +282,9 @@ export function WorkerIdCardModal({
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <AppIcon name="print-outline" size={18} color="#FFFFFF" />
+                  <AppIcon name="download-outline" size={18} color="#FFFFFF" />
                   <Text style={styles.printBtnText}>
-                    {isHi ? 'आईडी कार्ड प्रिंट / डाउनलोड' : 'Print / Download ID Card'}
+                    {isHi ? 'आईडी कार्ड डाउनलोड करें' : 'Download ID Card'}
                   </Text>
                 </>
               )}

@@ -1476,17 +1476,18 @@ export async function downloadSiteDocument(
 }
 
 /**
- * Generates and prints/shares an Official Karigar ID Card PDF (Standard CR80 Size)
+ * Helper to build high-quality official Labour ID Card HTML (with worker photo, verified stamp, and security barcode)
  */
-export async function printWorkerIdCardAndGatePassPdf(
+function buildWorkerIdCardHtml(
   data: Snapshot,
   worker: Row,
   selectedSiteId?: string,
   validUntil?: string,
-  lang: string = 'en'
-) {
+  lang: string = 'en',
+  isA4: boolean = false
+): string {
   const isHi = lang === 'hi';
-  const orgName = data.organization?.name || 'Authorized Contractor Services';
+  const orgName = data.organization?.name || 'ThekaBook Contractor Services';
   const contractorName = data.user?.name || 'Site Incharge';
   const workerCode = `TK-W-${String(worker.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
 
@@ -1501,17 +1502,17 @@ export async function printWorkerIdCardAndGatePassPdf(
     year: 'numeric',
   });
 
+  const photoSrc = worker.photo ? String(worker.photo).trim() : '';
   const initials = worker.name ? worker.name.trim().split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase() : 'W';
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="${isHi ? 'hi' : 'en'}">
 <head>
   <meta charset="utf-8" />
   <title>Labour ID Card - ${escape(worker.name)}</title>
   <style>
     @page {
-      size: A4 portrait;
-      margin: 15mm;
+      ${isA4 ? 'size: A4 portrait; margin: 15mm;' : 'size: 340px 530px; margin: 0;'}
     }
     * {
       box-sizing: border-box;
@@ -1520,223 +1521,229 @@ export async function printWorkerIdCardAndGatePassPdf(
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     body {
-      background: #F8FAFC;
+      background: ${isA4 ? '#F8FAFC' : '#F1F5F9'};
       color: #0F172A;
-      padding: 24px;
+      margin: 0;
+      padding: ${isA4 ? '20px' : '10px'};
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-
-    /* Standard CR80 PVC ID Card (Standard 54mm x 85.6mm proportions) */
     .id-card-badge {
-      width: 310px;
-      height: 490px;
+      width: 320px;
+      height: 508px;
       background: #FFFFFF;
-      border: 1.5px solid #E2E8F0;
+      border: 1.5px solid #CBD5E1;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
       display: flex;
       flex-direction: column;
       position: relative;
     }
-
     .lanyard-notch {
       width: 44px;
-      height: 7px;
+      height: 6px;
       background: #E2E8F0;
-      border-radius: 4px;
-      margin: 8px auto 6px;
+      border-radius: 3px;
+      margin: 6px auto 5px;
+      border: 1px solid #CBD5E1;
     }
-
     .card-header-band {
-      background: #1E293B;
+      background: #0F2851;
       color: #FFFFFF;
-      padding: 9px 14px;
+      padding: 9px 12px;
       text-align: center;
     }
     .firm-name {
       font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.4px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .card-type-tag {
-      font-size: 8.5px;
+      font-size: 8px;
       color: #94A3B8;
-      font-weight: 600;
-      letter-spacing: 0.3px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
       margin-top: 2px;
       text-transform: uppercase;
     }
     .gold-divider {
-      height: 2.5px;
-      background: #F59E0B;
+      height: 3px;
+      background: linear-gradient(90deg, #D97706, #F59E0B, #FDE68A, #F59E0B, #D97706);
       width: 100%;
     }
-
     .card-body {
-      padding: 12px 16px;
+      padding: 10px 14px 12px;
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
     }
-
     .photo-frame {
-      width: 76px;
-      height: 76px;
-      border-radius: 38px;
+      width: 80px;
+      height: 80px;
+      border-radius: 40px;
       background: #F8FAFC;
-      border: 2px solid #E2E8F0;
+      border: 2.5px solid #0F2851;
       display: flex;
       align-items: center;
-      justifyContent: center;
+      justify-content: center;
       position: relative;
-      margin-bottom: 8px;
-      overflow: visible;
+      margin-bottom: 6px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(15, 40, 81, 0.12);
     }
     .photo-img {
       width: 100%;
       height: 100%;
-      border-radius: 38px;
+      border-radius: 40px;
       object-fit: cover;
+      display: block;
     }
     .avatar-initials {
-      font-size: 26px;
-      font-weight: 700;
-      color: #475569;
+      font-size: 28px;
+      font-weight: 800;
+      color: #0F2851;
     }
     .verified-mark {
       position: absolute;
-      bottom: -1px;
-      right: -1px;
+      bottom: 2px;
+      right: 2px;
       background: #16A34A;
       color: #FFFFFF;
       font-size: 9px;
       font-weight: 900;
-      padding: 2px 5px;
-      border-radius: 8px;
-      border: 1.5px solid #FFFFFF;
+      width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      border: 2px solid #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
-
     .worker-name {
-      font-size: 16px;
-      font-weight: 700;
+      font-size: 15px;
+      font-weight: 800;
       color: #0F172A;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 290px;
     }
     .skill-pill {
       display: inline-block;
-      background: #F8FAFC;
-      border: 1px solid #E2E8F0;
-      color: #475569;
-      font-size: 10.5px;
-      font-weight: 600;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      color: #1D4ED8;
+      font-size: 10px;
+      font-weight: 700;
       padding: 2px 10px;
       border-radius: 12px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
-
     .info-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .info-table td {
-      padding: 4.5px 6px;
-      border-bottom: 1px dashed #F1F5F9;
-      font-size: 11px;
+      padding: 4px 6px;
+      border-bottom: 1px dashed #E2E8F0;
+      font-size: 10.5px;
       text-align: left;
     }
     .col-key {
       color: #64748B;
       font-weight: 600;
-      width: 38%;
-      font-size: 9.5px;
+      width: 36%;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
     .col-val {
       color: #1E293B;
-      font-weight: 600;
+      font-weight: 700;
       text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
     }
-
     .sign-row {
       width: 100%;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
       margin-top: auto;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       padding: 0 4px;
     }
     .seal-box {
-      border: 1px solid #CBD5E1;
+      border: 1.5px solid #CBD5E1;
       background: #F8FAFC;
-      padding: 2px 7px;
-      border-radius: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
       text-align: center;
     }
     .seal-text {
       font-size: 7.5px;
-      font-weight: 800;
-      color: #475569;
-      letter-spacing: 0.4px;
+      font-weight: 900;
+      color: #0F2851;
+      letter-spacing: 0.5px;
     }
     .seal-sub {
       font-size: 6.5px;
-      font-weight: 700;
+      font-weight: 800;
       color: #D97706;
     }
     .sign-box {
-      width: 100px;
+      width: 105px;
       text-align: center;
     }
     .sign-line {
       width: 100%;
       height: 1px;
-      background: #CBD5E1;
+      background: #94A3B8;
       margin-bottom: 3px;
     }
     .sign-label {
-      font-size: 8px;
-      font-weight: 600;
-      color: #94A3B8;
+      font-size: 7.5px;
+      font-weight: 700;
+      color: #64748B;
     }
-
     .barcode-strip {
       width: 100%;
       background: #F8FAFC;
-      border: 1px solid #F1F5F9;
+      border: 1px solid #E2E8F0;
       border-radius: 6px;
-      padding: 4px;
+      padding: 3px;
       text-align: center;
     }
     .barcode-pattern {
       font-family: monospace;
-      letter-spacing: 2px;
+      letter-spacing: 3px;
       font-size: 10px;
-      font-weight: 700;
-      color: #475569;
+      font-weight: 800;
+      color: #334155;
     }
     .security-note {
       font-size: 6.5px;
-      font-weight: 600;
-      color: #94A3B8;
-      letter-spacing: 0.4px;
+      font-weight: 700;
+      color: #64748B;
+      letter-spacing: 0.5px;
     }
-
-    .print-caption {
-      margin-top: 16px;
-      font-size: 11px;
-      color: #94A3B8;
-      text-align: center;
-      font-weight: 500;
-    }
+    ${isA4 ? '.print-caption { margin-top: 16px; font-size: 11px; color: #94A3B8; text-align: center; font-weight: 500; }' : ''}
   </style>
 </head>
 <body>
@@ -1750,8 +1757,8 @@ export async function printWorkerIdCardAndGatePassPdf(
 
     <div class="card-body">
       <div class="photo-frame">
-        ${worker.photo
-          ? `<img src="${worker.photo}" class="photo-img" />`
+        ${photoSrc
+          ? `<img src="${photoSrc}" class="photo-img" />`
           : `<div class="avatar-initials">${escape(initials)}</div>`
         }
         <div class="verified-mark">✓</div>
@@ -1762,24 +1769,24 @@ export async function printWorkerIdCardAndGatePassPdf(
 
       <table class="info-table">
         <tr>
-          <td class="col-key">${isHi ? 'आईडी नंबर' : 'ID NUMBER'}:</td>
-          <td class="col-val" style="font-family:monospace; font-weight:700; color:#2563EB;">${escape(workerCode)}</td>
+          <td class="col-key">${isHi ? 'आईडी नंबर' : 'ID NUMBER'}</td>
+          <td class="col-val" style="font-family:monospace; color:#0F2851;">${escape(workerCode)}</td>
         </tr>
         <tr>
-          <td class="col-key">${isHi ? 'मोबाइल' : 'PHONE'}:</td>
+          <td class="col-key">${isHi ? 'मोबाइल' : 'PHONE'}</td>
           <td class="col-val">${escape(worker.phone || (isHi ? 'उपलब्ध नहीं' : 'Not Provided'))}</td>
         </tr>
         <tr>
-          <td class="col-key">${isHi ? 'कार्य स्थल' : 'SITE'}:</td>
+          <td class="col-key">${isHi ? 'कार्य स्थल' : 'SITE'}</td>
           <td class="col-val">${escape(siteName)}</td>
         </tr>
         <tr>
-          <td class="col-key">${isHi ? 'ठेकेदार' : 'CONTRACTOR'}:</td>
+          <td class="col-key">${isHi ? 'ठेकेदार' : 'CONTRACTOR'}</td>
           <td class="col-val">${escape(contractorName)}</td>
         </tr>
         <tr>
-          <td class="col-key">${isHi ? 'वैधता' : 'VALID UPTO'}:</td>
-          <td class="col-val" style="color:#1E293B; font-weight:700;">${escape(expiryStr)}</td>
+          <td class="col-key">${isHi ? 'वैधता' : 'VALID UPTO'}</td>
+          <td class="col-val" style="color:#0F2851;">${escape(expiryStr)}</td>
         </tr>
       </table>
 
@@ -1796,16 +1803,117 @@ export async function printWorkerIdCardAndGatePassPdf(
 
       <div class="barcode-strip">
         <div class="barcode-pattern">|||| | ||||| || |||| |||</div>
-        <div class="security-note">SECURITY AUTH • CR80 STANDARD</div>
+        <div class="security-note">SECURITY VERIFIED • CR80 DIGITAL BADGE</div>
       </div>
     </div>
   </div>
-
-  <div class="print-caption">
-    Official Standard CR80 Labour Identity Card • Generated via ThekaBook Digital System
-  </div>
+  ${isA4 ? '<div class="print-caption">Official Standard CR80 Labour Identity Card • Generated via ThekaBook Digital System</div>' : ''}
 </body>
 </html>`;
+}
 
-  await printOrShareHtml(html, `Labour_ID_Card_${worker.name.replace(/\s+/g, '_')}`);
+/**
+ * Generates and prints/downloads an Official Karigar ID Card PDF (Standard A4 Print Layout)
+ */
+export async function printWorkerIdCardAndGatePassPdf(
+  data: Snapshot,
+  worker: Row,
+  selectedSiteId?: string,
+  validUntil?: string,
+  lang: string = 'en'
+) {
+  const isHi = lang === 'hi';
+  const html = buildWorkerIdCardHtml(data, worker, selectedSiteId, validUntil, lang, true);
+  if (Platform.OS === 'web') {
+    if (typeof document !== 'undefined') {
+      try {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `Labour_ID_Card_${worker.name.replace(/\s+/g, '_')}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } catch { }
+    }
+    await Print.printAsync({ html });
+    return;
+  }
+  // Mobile (Android / iOS): Generate actual PDF file on device and trigger download / save sheet
+  const file = await Print.printToFileAsync({
+    html,
+  });
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(file.uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: isHi ? `${worker.name} का आईडी कार्ड डाउनलोड / सेव करें` : `Download / Save ID Card - ${worker.name}`,
+      UTI: 'com.adobe.pdf',
+    });
+  } else {
+    await Print.printAsync({ html });
+  }
+}
+
+export const downloadWorkerIdCardPdf = printWorkerIdCardAndGatePassPdf;
+
+/**
+ * Shares the Complete Karigar ID Card (with Photo & Card Visuals) directly to WhatsApp or native share sheet
+ */
+export async function shareWorkerIdCard(
+  data: Snapshot,
+  worker: Row,
+  selectedSiteId?: string,
+  validUntil?: string,
+  lang: string = 'en'
+) {
+  const isHi = lang === 'hi';
+  const orgName = data.organization?.name || 'ThekaBook Contractor Services';
+  const workerCode = `TK-W-${String(worker.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+  const site = selectedSiteId && selectedSiteId !== 'ALL'
+    ? data.sites.find((s) => s.id === selectedSiteId)
+    : data.sites[0];
+  const siteName = site ? site.name : (isHi ? 'समस्त अधिकृत साइट्स' : 'All Authorized Sites');
+
+  const expiryStr = validUntil || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString(isHi ? 'hi-IN' : 'en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  const html = buildWorkerIdCardHtml(data, worker, selectedSiteId, validUntil, lang, false);
+  const fileName = `Labour_ID_Card_${worker.name.replace(/\s+/g, '_')}`;
+
+  if (Platform.OS === 'web') {
+    await printOrShareHtml(html, fileName);
+    const summaryText = isHi
+      ? `*🪪 आधिकारिक कारीगर पहचान पत्र (Labour ID Card)*\n\n👤 *नाम:* ${worker.name}\n🛠️ *हुनर:* ${worker.skill || 'मजदूर'}\n🏷️ *आईडी कोड:* ${workerCode}\n📞 *मोबाइल:* ${worker.phone || 'N/A'}\n🏗️ *कार्य स्थल:* ${siteName}\n🏢 *फर्म:* ${orgName}\n⏳ *वैधता:* ${expiryStr} तक\n\n_ThekaBook Digital Labour ID System_`
+      : `*🪪 OFFICIAL LABOUR IDENTITY CARD*\n\n👤 *Name:* ${worker.name}\n🛠️ *Trade:* ${worker.skill || 'Worker'}\n🏷️ *ID Code:* ${workerCode}\n📞 *Phone:* ${worker.phone || 'N/A'}\n🏗️ *Site:* ${siteName}\n🏢 *Contractor:* ${orgName}\n⏳ *Valid:* ${expiryStr}\n\n_ThekaBook Digital Labour ID System_`;
+    try {
+      if (typeof window !== 'undefined') {
+        window.open(`https://wa.me/?text=${encodeURIComponent(summaryText)}`, '_blank');
+      }
+    } catch { }
+    return;
+  }
+
+  // Mobile (Android / iOS) - Produce exact sized standalone ID Card file with photo
+  const file = await Print.printToFileAsync({
+    html,
+    width: 340,
+    height: 530,
+    margins: { left: 0, top: 0, right: 0, bottom: 0 },
+  });
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(file.uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: isHi ? `${worker.name} का पहचान पत्र भेजें` : `Share ID Card - ${worker.name}`,
+      UTI: 'com.adobe.pdf',
+    });
+  } else {
+    throw new Error('Sharing is not available on this device');
+  }
 }

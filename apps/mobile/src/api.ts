@@ -47,8 +47,8 @@ export function getApiBaseUrl(): string {
     } catch { }
   }
 
-  // 6. Default LAN IP fallback
-  return 'http://192.168.1.9:4000';
+  // 6. Default LAN IP fallback (Active Wi-Fi LAN)
+  return 'http://10.87.125.241:4000';
 }
 
 export function getPublicReportBaseUrl(): string {
@@ -108,10 +108,12 @@ export async function request(path: string, token: string | null, body?: unknown
     ...(token ? { Authorization: 'Bearer ' + token } : {}),
   };
 
-  const urlsToTry = [
+  const candidateUrls = [
+    `http://10.87.125.241:4000${path}`,
     baseUrl + path,
-    ...(baseUrl.includes('loca.lt') ? [`http://192.168.1.9:4000${path}`] : []),
+    `http://192.168.1.9:4000${path}`,
   ];
+  const urlsToTry = Array.from(new Set(candidateUrls));
 
   let lastError: any = null;
 
@@ -123,7 +125,7 @@ export async function request(path: string, token: string | null, body?: unknown
           method: body === undefined ? 'GET' : 'POST',
           headers,
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(4000),
         });
 
         const rawText = await res.text();
