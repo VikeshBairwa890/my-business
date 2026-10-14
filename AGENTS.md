@@ -41,3 +41,10 @@ Yeh rules aur guidelines user dwara explicitly define ki gayi hain. Har feature 
 - **Database Engine:**
   - **Prisma ORM** with **PostgreSQL** (accessible via pgAdmin).
   - Strongly typed schemas aur integer-paise financial precision.
+
+---
+
+## 🛑 4. Git Commit & Push Rule (Strict)
+- **Never auto-commit or auto-push without user's explicit request:**
+  - Assistant ko kabhi bhi khud se `git commit` ya `git push` nahi chalana hai.
+  - Hamesha code changes files me karke chhodna hai taaki user khud VS Code me changes review kare aur apni side se commit/push kare.
