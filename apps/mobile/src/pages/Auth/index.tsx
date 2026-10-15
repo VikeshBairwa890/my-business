@@ -582,7 +582,13 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 </View>
               ) : (
                 <Text style={styles.submitBtnText}>
-                  {isRegister ? 'Create Account' : 'Sign In'}
+                  {isRegister
+                    ? lang === 'hi'
+                      ? 'नया खाता बनाएं (Create Account)'
+                      : 'Create Account'
+                    : lang === 'hi'
+                      ? 'लॉग इन करें (Sign In)'
+                      : 'Sign In'}
                 </Text>
               )}
             </Pressable>
@@ -614,6 +620,16 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 </Text>
               </Text>
             </Pressable>
+
+            {/* Trust Badge */}
+            <View style={styles.trustBadgeRow}>
+              <AppIcon name="shield-checkmark" size={13} color="#059669" />
+              <Text style={styles.trustBadgeText}>
+                {lang === 'hi'
+                  ? '100% सुरक्षित और डेटा एन्क्रिप्टेड • ThekaBook Cloud'
+                  : '100% Safe & Secure • Indian Contractor Cloud'}
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -661,8 +677,8 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 30 : 60,
   },
   desktopScrollContainer: {
-    justifyContent: 'center',
-    paddingTop: 24,
+    justifyContent: 'flex-start',
+    paddingVertical: 36,
   },
 
   /* Card Container */
@@ -990,5 +1006,21 @@ const styles = StyleSheet.create({
   toggleFooterLink: {
     color: '#2563EB',
     fontWeight: '800',
+  },
+
+  /* Trust Badge */
+  trustBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  trustBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    letterSpacing: 0.2,
   },
 });

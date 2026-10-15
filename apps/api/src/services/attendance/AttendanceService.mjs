@@ -1,5 +1,6 @@
 import prisma from '../../prisma.mjs';
-import { wages } from '../../../../shared/finance.js';
+const wages = (units, minutes, dailyRate, overtimeRate) =>
+  Math.round(Number(units) * Number(dailyRate)) + Math.round((Number(minutes) * Number(overtimeRate)) / 60);
 
 export class AttendanceService {
   static async listByDate(orgId, date) {
