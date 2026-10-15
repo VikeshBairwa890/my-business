@@ -30,6 +30,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [org, setOrg] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,6 +43,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const scrollRef = useRef<ScrollView>(null);
   const nameInputRef = useRef<TextInput>(null);
   const orgInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
 
@@ -114,20 +116,26 @@ export function AuthPage({ onLogin }: AuthPageProps) {
       const payload = {
         email: email.trim(),
         password,
-        ...(isRegister ? { name: name.trim(), organization: org.trim() } : {}),
+        ...(isRegister
+          ? {
+            name: name.trim(),
+            organization: org.trim(),
+            phone: phone.trim(),
+          }
+          : {}),
       };
       const result = await request(endpoint, null, payload);
 
       setIsRedirecting(true);
-      // Hold animation for 3.2 seconds so user can enjoy the smooth transition
-      await new Promise((resolve) => setTimeout(resolve, 3200));
+      // Brief smooth transition feedback
+      await new Promise((resolve) => setTimeout(resolve, 400));
       await onLogin(result.token);
     } catch (e: any) {
       setError(
         e.message ||
-          (lang === 'hi'
-            ? 'प्रमाणीकरण विफल। कृपया अपने क्रेडेंशियल्स जांचें।'
-            : 'Authentication failed. Please verify your details.')
+        (lang === 'hi'
+          ? 'प्रमाणीकरण विफल। कृपया अपने क्रेडेंशियल्स जांचें।'
+          : 'Authentication failed. Please verify your details.')
       );
       setIsRedirecting(false);
       setBusy(false);
@@ -144,8 +152,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
               ? 'खाता सफलतापूर्वक बन गया!'
               : 'Account Created Successfully!'
             : lang === 'hi'
-            ? 'ठेका-बुक में आपका स्वागत है!'
-            : 'Welcome back to ThekaBook'
+              ? 'ठेका-बुक में आपका स्वागत है!'
+              : 'Welcome back to ThekaBook'
         }
         subtitle={
           lang === 'hi'
@@ -265,8 +273,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     ? 'अपना ठेकेदारी खाता बनाएं'
                     : 'Create Contractor Account'
                   : lang === 'hi'
-                  ? 'अपने खाते में लॉग इन करें'
-                  : 'Welcome Back'}
+                    ? 'अपने खाते में लॉग इन करें'
+                    : 'Welcome Back'}
               </Text>
               <Text style={styles.formSubtitle}>
                 {isRegister
@@ -274,8 +282,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     ? 'साइट्स, हाजिरी और खर्चों का पक्का हिसाब रखें'
                     : 'Manage sites, daily haziri & profits with confidence'
                   : lang === 'hi'
-                  ? 'अपना सुरक्षित बहीखाता एक्सेस करने के लिए विवरण दर्ज करें'
-                  : 'Enter your credentials to access your financial ledger'}
+                    ? 'अपना सुरक्षित बहीखाता एक्सेस करने के लिए विवरण दर्ज करें'
+                    : 'Enter your credentials to access your financial ledger'}
               </Text>
             </View>
 
@@ -362,6 +370,49 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         value={org}
                         onChangeText={setOrg}
                         onFocus={() => handleFieldFocus('org', 80)}
+                        onBlur={() => setFocusedField(null)}
+                        returnKeyType="next"
+                        onSubmitEditing={() => phoneInputRef.current?.focus()}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {/* Mobile Phone Number */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      {lang === 'hi' ? 'मोबाइल नंबर (MOBILE NUMBER)' : 'MOBILE NUMBER'}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        phoneInputRef.current?.focus();
+                        handleFieldFocus('phone', 110);
+                      }}
+                      style={[
+                        styles.inputBox,
+                        focusedField === 'phone' && styles.inputBoxFocused,
+                      ]}
+                    >
+                      <View style={styles.inputIconWrap} pointerEvents="none">
+                        <AppIcon
+                          name="call-outline"
+                          size={18}
+                          color={focusedField === 'phone' ? '#2563EB' : '#94A3B8'}
+                        />
+                      </View>
+                      <Text style={{ fontWeight: '600', color: '#1E293B', marginRight: 6, fontSize: 15 }}>
+                        +91
+                      </Text>
+                      <TextInput
+                        ref={phoneInputRef}
+                        accessibilityLabel="Mobile phone number"
+                        style={styles.textInput}
+                        placeholder={lang === 'hi' ? '10-अंकों का मोबाइल नंबर' : '10-digit mobile number'}
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        value={phone}
+                        onChangeText={setPhone}
+                        onFocus={() => handleFieldFocus('phone', 110)}
                         onBlur={() => setFocusedField(null)}
                         returnKeyType="next"
                         onSubmitEditing={() => emailInputRef.current?.focus()}
@@ -454,8 +505,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                           ? 'सुरक्षित पासवर्ड बनाएं (10+ अक्षर)'
                           : 'Create secure password (10+ chars)'
                         : lang === 'hi'
-                        ? 'अपना पासवर्ड दर्ज करें'
-                        : 'Enter your password'
+                          ? 'अपना पासवर्ड दर्ज करें'
+                          : 'Enter your password'
                     }
                     placeholderTextColor="#94A3B8"
                     secureTextEntry={!showPassword}
@@ -525,8 +576,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         ? 'खाता बनाया जा रहा है...'
                         : 'Creating Account...'
                       : lang === 'hi'
-                      ? 'लॉग इन हो रहा है...'
-                      : 'Signing In...'}
+                        ? 'लॉग इन हो रहा है...'
+                        : 'Signing In...'}
                   </Text>
                 </View>
               ) : (
@@ -550,16 +601,16 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     ? 'पहले से खाता है? '
                     : 'Already have an account? '
                   : lang === 'hi'
-                  ? 'नया खाता बनाना चाहते हैं? '
-                  : "Don't have an account? "}
+                    ? 'नया खाता बनाना चाहते हैं? '
+                    : "Don't have an account? "}
                 <Text style={styles.toggleFooterLink}>
                   {isRegister
                     ? lang === 'hi'
                       ? 'लॉग इन करें'
                       : 'Sign In'
                     : lang === 'hi'
-                    ? 'खाता बनाएं'
-                    : 'Create Account'}
+                      ? 'खाता बनाएं'
+                      : 'Create Account'}
                 </Text>
               </Text>
             </Pressable>
