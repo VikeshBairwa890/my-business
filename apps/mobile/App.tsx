@@ -672,8 +672,9 @@ function MainApp() {
 
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <StatusBar style="dark" />
+    <View style={styles.webDesktopWrapper}>
+      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+        <StatusBar style="dark" />
 
       {/* Toast notification */}
       {toast ? (
@@ -1104,7 +1105,8 @@ function MainApp() {
           onSave={handleSaveForm}
         />
       ) : null}
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -1121,9 +1123,26 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  webDesktopWrapper: {
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
   root: {
     flex: 1,
+    width: '100%',
+    maxWidth: 600,
     backgroundColor: Colors.background,
+    ...Platform.select({
+      web: {
+        height: '100vh',
+        boxShadow: '0 0 32px rgba(0, 0, 0, 0.08)',
+        position: 'relative',
+        overflow: 'hidden',
+      } as any,
+    }),
   },
   loadingContainer: {
     flex: 1,

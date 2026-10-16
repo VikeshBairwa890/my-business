@@ -80,7 +80,7 @@ export function BottomNav({ tabs, activeTab, onTabPress, onCenterPress }: Bottom
                 accessibilityRole="button"
                 accessibilityLabel="Quick Action"
               >
-                <AppIcon name="add" size={32} color="#1E293B" />
+                <AppIcon name="add" size={38} color="#1E293B" />
               </Pressable>
             </View>
 
@@ -102,6 +102,9 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
     paddingBottom: Platform.OS === 'ios' ? 24 : 8,
     paddingTop: 6,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
     ...Platform.select({
       web: { boxShadow: '0 -4px 16px rgba(0,0,0,0.06)' },
       default: {
@@ -117,7 +120,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    maxWidth: 520,
+    maxWidth: 600,
     alignSelf: 'center',
     width: '100%',
     paddingHorizontal: 8,
@@ -167,26 +170,26 @@ const styles = StyleSheet.create({
   centerFabContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 60,
+    width: 72,
   },
   centerFab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: '#F59E0B', // Golden amber like screenshot
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -22,
-    borderWidth: 3,
+    marginTop: -28,
+    borderWidth: 3.5,
     borderColor: '#FFFFFF',
     ...Platform.select({
-      web: { boxShadow: '0 6px 16px rgba(245, 158, 11, 0.45)' },
+      web: { boxShadow: '0 8px 20px rgba(245, 158, 11, 0.48)' },
       default: {
         shadowColor: '#F59E0B',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowOpacity: 0.45,
+        shadowRadius: 10,
+        elevation: 10,
       },
     }),
   },
