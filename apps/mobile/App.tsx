@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
-  ActivityIndicator,
   StyleSheet,
   Platform,
   BackHandler,
@@ -40,17 +39,17 @@ import {
 } from './src/pages/Entries';
 
 // API & Helpers
-import { getToken, saveToken, request, commandKey } from './src/api';
+import { request, commandKey, UserInfo } from './src/api';
 import { attendanceForm, entryForm, siteForm, workerForm, voidForm } from './src/forms';
 import { pdfReport, shareReport } from './src/report';
 import { FormSpec, Row, Snapshot } from './src/types';
 import { LanguageProvider, useLanguage } from './src/i18n';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AppLoader } from './src/components/common/AppLoader';
 
 function MainApp() {
   const { t, lang } = useLanguage();
-  const [token, setToken] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const { isLoggedIn, token, user, ready, setAuth, logout, updateUser } = useAuth();
   const [data, setData] = useState<Snapshot | null>(null);
 
   const navTabs: TabItem[] = [
@@ -160,26 +159,25 @@ function MainApp() {
         }
       `;
     }
-
-    getToken()
-      .then((t) => {
-        setToken(t);
-        setReady(true);
-      })
-      .catch(() => setReady(true));
   }, []);
 
   async function refresh(t = token) {
     if (!t) return;
     setRefreshing(true);
     try {
-      setData(await request('/snapshot', t));
+      const snap = await request('/snapshot', t);
+      setData(snap);
+      if (snap?.user || snap?.organization) {
+        updateUser({
+          name: snap.user?.name || user?.name || '',
+          organizationName: snap.organization?.name || user?.organizationName || '',
+        });
+      }
       setError('');
     } catch (e: any) {
       setError(e.message);
       if (e.status === 401) {
-        await saveToken(null);
-        setToken(null);
+        await logout();
         setData(null);
       }
     } finally {
@@ -198,19 +196,14 @@ function MainApp() {
     }
   }, [toast]);
 
-  async function handleLogin(newToken: string) {
-    await saveToken(newToken);
-    setToken(newToken);
+  async function handleLogin(newToken: string, newUser?: UserInfo) {
+    await setAuth(newToken, newUser || null);
   }
 
   async function handleLogout() {
     try {
-      await request('/auth/logout', token, {});
-    } catch (e) {
-      // Session revoked or offline
+      await logout();
     } finally {
-      await saveToken(null);
-      setToken(null);
       setData(null);
       setSelectedSiteId(null);
       setIsNewSite(false);
@@ -672,7 +665,7 @@ function MainApp() {
     return <AppLoader message="ThekaBook" />;
   }
 
-  if (!token) {
+  if (!isLoggedIn || !token) {
     return <AuthPage onLogin={handleLogin} />;
   }
 
@@ -1020,7 +1013,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <LanguageProvider>
-        <MainApp />
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
       </LanguageProvider>
     </SafeAreaProvider>
   );

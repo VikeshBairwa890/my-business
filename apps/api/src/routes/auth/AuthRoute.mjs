@@ -16,6 +16,8 @@ const authLimiter = rateLimit({
 // Clean Express Route Mapping
 authRouter.post('/register', authLimiter, AuthController.register);
 authRouter.post('/login', authLimiter, AuthController.login);
+authRouter.post('/forgot-password', authLimiter, AuthController.forgotPassword);
+authRouter.post('/reset-password', authLimiter, AuthController.resetPassword);
 authRouter.post('/logout', AuthController.logout);
 
 export default authRouter;

@@ -59,16 +59,152 @@ export function getPublicReportBaseUrl(): string {
   return getApiBaseUrl();
 }
 
-export const getToken = async () =>
-  Platform.OS === 'web' ? sessionStorage.getItem(TOKEN_KEY) : SecureStore.getItemAsync(TOKEN_KEY);
+export interface UserInfo {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  phone?: string;
+  orgId?: string;
+  organizationName?: string;
+  [key: string]: any;
+}
 
-export async function saveToken(token: string | null) {
-  if (Platform.OS === 'web') {
-    token ? sessionStorage.setItem(TOKEN_KEY, token) : sessionStorage.removeItem(TOKEN_KEY);
-    return;
+export interface StoredAuthState {
+  isLoggedIn: boolean;
+  token: string | null;
+  user: UserInfo | null;
+}
+
+const AUTH_STATE_KEY = 'thekabook_auth_state';
+
+export const getToken = async (): Promise<string | null> => {
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(TOKEN_KEY);
+        if (saved) return saved;
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        return sessionStorage.getItem(TOKEN_KEY);
+      }
+      return null;
+    }
+    return await SecureStore.getItemAsync(TOKEN_KEY);
+  } catch {
+    return null;
   }
-  if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
-  else await SecureStore.deleteItemAsync(TOKEN_KEY);
+};
+
+export async function saveToken(token: string | null): Promise<void> {
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') {
+        token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY);
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        token ? sessionStorage.setItem(TOKEN_KEY, token) : sessionStorage.removeItem(TOKEN_KEY);
+      }
+      return;
+    }
+    if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
+    else await SecureStore.deleteItemAsync(TOKEN_KEY);
+  } catch { }
+}
+
+export async function saveAuthState(token: string | null, user: UserInfo | null): Promise<void> {
+  try {
+    const isLoggedIn = Boolean(token);
+    const state: StoredAuthState = {
+      isLoggedIn,
+      token,
+      user,
+    };
+    const serialized = JSON.stringify(state);
+
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') {
+        if (token) {
+          localStorage.setItem(TOKEN_KEY, token);
+          localStorage.setItem(AUTH_STATE_KEY, serialized);
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(AUTH_STATE_KEY);
+        }
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        if (token) {
+          sessionStorage.setItem(TOKEN_KEY, token);
+          sessionStorage.setItem(AUTH_STATE_KEY, serialized);
+        } else {
+          sessionStorage.removeItem(TOKEN_KEY);
+          sessionStorage.removeItem(AUTH_STATE_KEY);
+        }
+      }
+      return;
+    }
+
+    if (token) {
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
+      await SecureStore.setItemAsync(AUTH_STATE_KEY, serialized);
+    } else {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(AUTH_STATE_KEY);
+    }
+  } catch { }
+}
+
+export async function getStoredAuthState(): Promise<StoredAuthState> {
+  try {
+    let raw: string | null = null;
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') {
+        raw = localStorage.getItem(AUTH_STATE_KEY);
+      }
+      if (!raw && typeof sessionStorage !== 'undefined') {
+        raw = sessionStorage.getItem(AUTH_STATE_KEY);
+      }
+    } else {
+      raw = await SecureStore.getItemAsync(AUTH_STATE_KEY);
+    }
+
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.token) {
+        return {
+          isLoggedIn: true,
+          token: parsed.token,
+          user: parsed.user || null,
+        };
+      }
+    }
+
+    // Fallback: Check if token exists alone
+    const directToken = await getToken();
+    if (directToken) {
+      return {
+        isLoggedIn: true,
+        token: directToken,
+        user: null,
+      };
+    }
+
+    return {
+      isLoggedIn: false,
+      token: null,
+      user: null,
+    };
+  } catch {
+    return {
+      isLoggedIn: false,
+      token: null,
+      user: null,
+    };
+  }
+}
+
+export async function clearAuthState(): Promise<void> {
+  await saveAuthState(null, null);
 }
 
 const REMEMBERED_EMAIL_KEY = 'thekabook_remembered_email';
