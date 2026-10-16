@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
   Platform,
   BackHandler,
@@ -53,12 +54,10 @@ function MainApp() {
   const [data, setData] = useState<Snapshot | null>(null);
 
   const navTabs: TabItem[] = [
-    { key: 'home', label: t('navOverview', 'Overview'), icon: 'grid-outline' },
-    { key: 'sites', label: t('navSites', 'Sites'), icon: 'business-outline' },
-    { key: 'attendance', label: t('navAttendance', 'Haziri'), icon: 'calendar-outline' },
-    { key: 'team', label: t('navLabour', 'Labour'), icon: 'people-outline' },
-    { key: 'ledger', label: t('navHisab', 'Hisab'), icon: 'wallet-outline' },
-    { key: 'reports', label: t('navReports', 'Reports'), icon: 'bar-chart-outline' },
+    { key: 'home', label: 'Home', icon: 'home-outline' },
+    { key: 'sites', label: 'Sites', icon: 'business-outline' },
+    { key: 'ledger', label: 'Hisaab', icon: 'document-text-outline' },
+    { key: 'profile', label: 'Profile', icon: 'person-outline' },
   ];
 
   // Check initial browser path on Web
@@ -127,6 +126,7 @@ function MainApp() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [showFabModal, setShowFabModal] = useState(false);
   const pendingRef = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -185,9 +185,12 @@ function MainApp() {
     }
   }
 
+  // Fetch snapshot data in the background as soon as token is ready
   useEffect(() => {
-    if (token) refresh(token);
-  }, [token]);
+    if (token && !data && !refreshing) {
+      refresh(token);
+    }
+  }, [token, data, refreshing]);
 
   useEffect(() => {
     if (toast) {
@@ -240,7 +243,7 @@ function MainApp() {
       });
       setForm(null);
       pendingRef.current = null;
-      setToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully');
+      setToast('Saved successfully');
       await refresh();
     } catch (e: any) {
       setError(e.message);
@@ -397,10 +400,7 @@ function MainApp() {
       }
 
       lastBackPressRef.current = now;
-      const exitMsg =
-        lang === 'hi'
-          ? 'ऐप बंद करने के लिए दोबारा बैक दबाएं'
-          : 'Press back again to exit app';
+      const exitMsg = 'Press back again to exit app';
 
       if (Platform.OS === 'android') {
         ToastAndroid.show(exitMsg, ToastAndroid.SHORT);
@@ -554,7 +554,7 @@ function MainApp() {
         key: pendingRef.current.key,
       });
       pendingRef.current = null;
-      setToast(lang === 'hi' ? 'नई साइट सफलतापूर्वक बन गई' : 'New site created successfully');
+      setToast('New site created successfully');
       await refresh();
       navigate('sites', '/sites', null, false);
     } catch (e: any) {
@@ -655,7 +655,7 @@ function MainApp() {
     existing?: Row
   ) => {
     if (!data?.sites.length || !data?.workers.some((w) => w.active)) {
-      setToast(lang === 'hi' ? 'कृपया पहले साइट और एक्टिव मजदूर जोड़ें' : 'Add an active worker and site first');
+      setToast('Please add an active worker and site first');
       return;
     }
     openForm(attendanceForm(data, siteId, workerId, existing));
@@ -669,30 +669,7 @@ function MainApp() {
     return <AuthPage onLogin={handleLogin} />;
   }
 
-  if (!data) {
-    if (error) {
-      return (
-        <SafeAreaView style={styles.errorContainer}>
-          <View style={styles.errorBox}>
-            <Text style={styles.errorTitle}>Connection Error</Text>
-            <Text style={styles.errorDesc}>{error}</Text>
-            <Button
-              title="Retry Connection"
-              onPress={() => refresh()}
-              style={{ marginTop: 12 }}
-            />
-            <Button
-              title="Sign Out"
-              variant="secondary"
-              onPress={handleLogout}
-              style={{ marginTop: 8 }}
-            />
-          </View>
-        </SafeAreaView>
-      );
-    }
-    return <AppLoader message="ThekaBook" />;
-  }
+
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
@@ -746,7 +723,44 @@ function MainApp() {
 
       {/* Main Screen Content */}
       <View style={styles.content}>
-        {isNewSite ? (
+        {tab === 'home' && !activeEntryKind && !isNewSite ? (
+          <DashboardPage
+            data={data}
+            refreshing={refreshing}
+            onRefresh={() => refresh()}
+            onNavigateTab={handleNavigate}
+            onOpenEntry={(kind, siteId, workerId) => openEntryPage(kind, siteId, workerId)}
+            onSelectSite={(siteId) => navigate('sites', `/sites/${siteId}`, siteId, false)}
+            onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
+            onOpenAttendance={(siteId) => openAttendanceModal(siteId)}
+            onShareReport={() => handleShareReport(true)}
+            onOpenProfile={() => handleNavigate('profile')}
+            onLogout={handleLogout}
+            onShowToast={(msg) => setToast(msg)}
+          />
+        ) : !data ? (
+          <View style={styles.loadingContainer}>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorTitle}>Connection Error</Text>
+                <Text style={styles.errorDesc}>{error}</Text>
+                <Button
+                  title="Retry Connection"
+                  onPress={() => refresh()}
+                  style={{ marginTop: 12 }}
+                />
+                <Button
+                  title="Back to Home"
+                  variant="secondary"
+                  onPress={() => navigate('home', '/', null, false, null, null)}
+                  style={{ marginTop: 8 }}
+                />
+              </View>
+            ) : (
+              <AppLoader message="Opening data..." />
+            )}
+          </View>
+        ) : isNewSite ? (
           <NewSitePage
             data={data}
             busy={busy}
@@ -829,21 +843,6 @@ function MainApp() {
           />
         ) : (
           <>
-            {tab === 'home' && (
-              <DashboardPage
-                data={data}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-                onOpenSite={(sId) => navigate('sites', `/sites/${sId}`, sId, false)}
-                onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
-                onOpenAttendance={() => openAttendanceModal()}
-                onOpenEntry={(kind) => openEntryPage(kind)}
-                onNavigateTab={handleNavigate}
-                onUpdateProfile={handleUpdateProfile}
-                onLogout={handleLogout}
-              />
-            )}
-
             {tab === 'sites' && (
               <SitesPage
                 data={data}
@@ -922,12 +921,112 @@ function MainApp() {
         )}
       </View>
 
-      {/* BHIM UPI Style Footer Bottom Navigation */}
+      {/* Footer Bottom Navigation with Center Golden Action FAB */}
       <BottomNav
         tabs={navTabs}
         activeTab={tab}
         onTabPress={handleNavigate}
+        onCenterPress={() => setShowFabModal(true)}
       />
+
+      {/* FAB Quick Action Sheet */}
+      {showFabModal ? (
+        <View style={styles.fabModalBackdrop}>
+          <Pressable style={styles.fabModalDismiss} onPress={() => setShowFabModal(false)} />
+          <View style={styles.fabSheetContent}>
+            <View style={styles.fabSheetHandle} />
+            <Text style={styles.fabSheetTitle}>Record Quick Entry</Text>
+            <Text style={styles.fabSheetSub}>Choose an action to record for your sites</Text>
+
+            <View style={styles.fabGrid}>
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  navigate('sites', '/sites/new', null, true);
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="business" size={24} color="#1D4ED8" />
+                </View>
+                <Text style={styles.fabActionLabel}>Nayi Site</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  openAttendanceModal();
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#EEF2FF' }]}>
+                  <Ionicons name="calendar" size={24} color="#4338CA" />
+                </View>
+                <Text style={styles.fabActionLabel}>Daily Haziri</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  openEntryPage('MATERIAL');
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="cube" size={24} color="#D97706" />
+                </View>
+                <Text style={styles.fabActionLabel}>Material Bill</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  openEntryPage('WAGE_PAYMENT');
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="cash" size={24} color="#059669" />
+                </View>
+                <Text style={styles.fabActionLabel}>Labour Wage</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  openEntryPage('RECEIPT');
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="card" size={24} color="#047857" />
+                </View>
+                <Text style={styles.fabActionLabel}>Payment In</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.fabActionBtn}
+                onPress={() => {
+                  setShowFabModal(false);
+                  openEntryPage('EXPENSE');
+                }}
+              >
+                <View style={[styles.fabActionIconBox, { backgroundColor: '#FFE4E6' }]}>
+                  <Ionicons name="receipt" size={24} color="#E11D48" />
+                </View>
+                <Text style={styles.fabActionLabel}>Other Expense</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={styles.fabCloseBtn}
+              onPress={() => setShowFabModal(false)}
+            >
+              <Text style={styles.fabCloseBtnText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* Form Modal */}
       {form && form.action.startsWith('site.') ? (
@@ -1111,4 +1210,102 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  /* FAB Action Sheet Styles */
+  fabModalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+    zIndex: 9999,
+  },
+  fabModalDismiss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  fabSheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    maxWidth: 520,
+    width: '100%',
+    alignSelf: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 -8px 32px rgba(0, 0, 0, 0.16)' },
+      default: { elevation: 16 },
+    }),
+  },
+  fabSheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  fabSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  fabSheetSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 18,
+  },
+  fabGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  fabActionBtn: {
+    width: '31%',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginBottom: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fabActionIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  fabActionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'center',
+  },
+  fabCloseBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fabCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
 });
+

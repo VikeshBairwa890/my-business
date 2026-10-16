@@ -42,7 +42,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
 
   // Ensure no stale remembered email lingers
   useEffect(() => {
-    saveRememberedEmail(null).catch(() => {});
+    saveRememberedEmail(null).catch(() => { });
   }, []);
 
   const handleFocus = (field: string, yOffset = 0) => {
@@ -128,7 +128,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
                 </Text>
                 <View style={styles.workspacePill}>
                   <AppIcon name="flash" size={10} color="#0284C7" />
-                  <Text style={styles.workspacePillText}>BHIM UPI & CONTRACTOR SECURED</Text>
+                  <Text style={styles.workspacePillText}>CONTRACTOR CLOUD WORKSPACE</Text>
                 </View>
               </View>
             </View>

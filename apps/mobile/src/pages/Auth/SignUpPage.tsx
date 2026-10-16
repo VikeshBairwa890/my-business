@@ -151,7 +151,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 </Text>
                 <View style={styles.workspacePill}>
                   <AppIcon name="flash" size={10} color="#0284C7" />
-                  <Text style={styles.workspacePillText}>BHIM UPI & CONTRACTOR SECURED</Text>
+                  <Text style={styles.workspacePillText}>CONTRACTOR CLOUD WORKSPACE</Text>
                 </View>
               </View>
             </View>
@@ -395,8 +395,8 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     styles.inputField,
                     focusedField === 'confirmPassword' && styles.inputFieldFocused,
                     confirmPassword.length > 0 &&
-                      password === confirmPassword &&
-                      styles.inputFieldSuccess,
+                    password === confirmPassword &&
+                    styles.inputFieldSuccess,
                   ]}
                 >
                   <View style={styles.inputIcon}>
@@ -407,8 +407,8 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                         confirmPassword.length > 0 && password === confirmPassword
                           ? Colors.success
                           : focusedField === 'confirmPassword'
-                          ? Colors.accent
-                          : Colors.textSubtle
+                            ? Colors.accent
+                            : Colors.textSubtle
                       }
                     />
                   </View>

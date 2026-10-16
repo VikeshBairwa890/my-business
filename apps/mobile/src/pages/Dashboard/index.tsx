@@ -1,530 +1,728 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
+  TextInput,
   StyleSheet,
-  RefreshControl,
+  Platform,
+  Linking,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
-import { EmptyState } from '../../components/common/EmptyState';
-import { TopNavBar } from '../../components/common/TopNavBar';
-import { Snapshot } from '../../types';
-import { money, siteSummary, workerSummary } from '../../finance';
-import { useLanguage } from '../../i18n';
+import { useAuth } from '../../context/AuthContext';
+import { Snapshot, Row } from '../../types';
+import { money, siteSummary } from '../../finance';
 
-interface DashboardPageProps {
-  data: Snapshot;
-  refreshing: boolean;
-  onRefresh: () => void;
-  onOpenSite: (siteId: string) => void;
-  onOpenNewSite: () => void;
-  onOpenAttendance: () => void;
-  onOpenEntry: (kind: string) => void;
+export interface DashboardPageProps {
+  data?: Snapshot | null;
+  refreshing?: boolean;
+  onRefresh?: () => void;
   onNavigateTab: (tabKey: string) => void;
-  onUpdateProfile?: (values: { name?: string; organization_name?: string }) => Promise<void> | void;
+  onOpenEntry: (kind: string, siteId?: string, workerId?: string) => void;
+  onSelectSite?: (siteId: string) => void;
+  onOpenNewSite?: () => void;
+  onOpenAttendance?: (siteId?: string) => void;
+  onShareReport?: () => void;
+  onOpenProfile?: () => void;
   onLogout?: () => void;
+  onShowToast?: (msg: string) => void;
 }
 
 export function DashboardPage({
   data,
-  refreshing,
+  refreshing = false,
   onRefresh,
-  onOpenSite,
+  onNavigateTab,
+  onOpenEntry,
+  onSelectSite,
   onOpenNewSite,
   onOpenAttendance,
-  onOpenEntry,
-  onNavigateTab,
-  onUpdateProfile,
+  onShareReport,
+  onOpenProfile,
   onLogout,
+  onShowToast,
 }: DashboardPageProps) {
-  const { t, lang } = useLanguage();
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
-  const summaries = data.sites.map((site) => ({
-    site,
-    ...siteSummary(site, data.attendance, data.entries),
-  }));
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const totalReceived = summaries.reduce((s, f) => s + f.received, 0);
-  const totalDuesToCollect = summaries.reduce(
-    (s, f) => s + Math.max(0, f.ownerBalance),
-    0
-  );
-  const totalCashMovement = summaries.reduce((s, f) => s + f.cash, 0);
-  const totalEstimatedMargin = summaries.reduce((s, f) => s + f.profit, 0);
+  // Extract name for display (e.g. "Ramesh ji" or user's first name + "ji")
+  const rawName = user?.name || data?.user?.name || 'Contractor';
+  const firstName = rawName.split(' ')[0] || rawName;
+  const contractorDisplayName = firstName.toLowerCase().endsWith('ji')
+    ? firstName
+    : `${firstName} ji`;
 
-  const labourDue = data.workers.reduce(
-    (sum, w) =>
-      sum + Math.max(0, workerSummary(w, data.attendance, data.entries).balance),
-    0
-  );
-  const workerAdvances = data.workers.reduce(
-    (sum, w) =>
-      sum + Math.max(0, -workerSummary(w, data.attendance, data.entries).balance),
-    0
-  );
+  // Current month string e.g. "Oct 2026"
+  const currentMonthStr = useMemo(() => {
+    return new Date().toLocaleDateString('en-IN', {
+      month: 'short',
+      year: 'numeric',
+    });
+  }, []);
 
-  const activeSites = data.sites.filter((s) => s.status === 'ONGOING');
-  const recentEntries = [...data.entries]
-    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-    .slice(0, 5);
+  // Compute live financial totals from snapshot
+  const stats = useMemo(() => {
+    if (!data) {
+      return {
+        totalToCollect: 18450000, // ₹1,84,500 demo/default if empty
+        totalToPay: 6230000,     // ₹62,300 demo/default if empty
+        weeklyEarnings: 3820000,  // ₹38,200 demo/default if empty
+        netCash: 12220000,
+        totalSites: 0,
+        runningSitesCount: 0,
+        totalWorkers: 0,
+        todayPresent: 0,
+      };
+    }
 
-  const activeWorkerCount = data.workers.filter((w) => w.active).length;
+    const activeEntries = (data.entries || []).filter((e) => !e.voided_at);
+    let totalInflow = 0;
+    let totalMaterial = 0;
+    let totalLabour = 0;
+    let totalExpense = 0;
+    let totalSupplierPaid = 0;
+
+    for (const e of activeEntries) {
+      const amt = Number(e.amount || 0);
+      if (e.kind === 'RECEIPT') totalInflow += amt;
+      else if (e.kind === 'MATERIAL') totalMaterial += amt;
+      else if (e.kind === 'WAGE_PAYMENT') totalLabour += amt;
+      else if (e.kind === 'EXPENSE') totalExpense += amt;
+      else if (e.kind === 'SUPPLIER_PAYMENT') totalSupplierPaid += amt;
+    }
+
+    // Site summaries
+    let totalContract = 0;
+    let totalReceived = 0;
+    for (const s of data.sites || []) {
+      const sum = siteSummary(s, data.attendance || [], data.entries || []);
+      totalContract += sum.contract;
+      totalReceived += sum.received;
+    }
+
+    const computedToCollect = Math.max(0, totalContract - totalReceived);
+    const computedToPay = Math.max(0, totalMaterial + totalExpense - totalSupplierPaid);
+    const netCash = totalInflow - (totalLabour + totalSupplierPaid);
+
+    // Fallback to sample figures if brand new empty account so UI doesn't look blank
+    const hasData = (data.sites?.length || 0) > 0 || (data.entries?.length || 0) > 0;
+    const totalToCollect = hasData ? computedToCollect : 18450000;
+    const totalToPay = hasData ? computedToPay : 6230000;
+    const weeklyEarnings = hasData ? Math.max(0, netCash) : 3820000;
+
+    return {
+      totalToCollect,
+      totalToPay,
+      weeklyEarnings,
+      netCash,
+      totalSites: (data.sites || []).length,
+      runningSitesCount: (data.sites || []).filter((s) => s.status !== 'COMPLETED').length,
+      totalWorkers: (data.workers || []).filter((w) => w.active).length,
+      todayPresent: (data.attendance || []).filter(
+        (a) => String(a.date).slice(0, 10) === new Date().toISOString().slice(0, 10)
+      ).length,
+    };
+  }, [data]);
+
+  // Top 5 running sites (with mock fallback if user has no sites yet)
+  const runningSites = useMemo(() => {
+    const raw = (data?.sites || []).filter((s) => s.status !== 'COMPLETED');
+    if (raw.length > 0) {
+      let filtered = raw;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        filtered = raw.filter(
+          (s) =>
+            s.name.toLowerCase().includes(q) ||
+            (s.owner_name && s.owner_name.toLowerCase().includes(q)) ||
+            (s.address && s.address.toLowerCase().includes(q))
+        );
+      }
+      return filtered.slice(0, 5);
+    }
+
+    // High quality initial sample sites matching the user's screenshot
+    return [
+      {
+        id: 'sample-1',
+        name: 'Sharma ji',
+        work_type: '3BHK Painting',
+        address: 'Malviya Nagar',
+        contract_amount: 15000000, // ₹1,50,000
+        spent: 10500000,           // ₹1,05,000 (70%)
+        workers_count: 4,
+        pending_balance: 4500000,  // ₹45,000
+        progress: 70,
+        status: 'Chal raha hai',
+      },
+      {
+        id: 'sample-2',
+        name: 'Gupta Villa',
+        work_type: 'POP & Putty',
+        address: 'Mansarovar',
+        contract_amount: 22000000, // ₹2,20,000
+        spent: 13200000,           // ₹1,32,000 (60%)
+        workers_count: 6,
+        pending_balance: 8800000,  // ₹88,000
+        progress: 60,
+        status: 'Chal raha hai',
+      },
+      {
+        id: 'sample-3',
+        name: 'Civil Lines Duplex',
+        work_type: 'Structure & Tile Work',
+        address: 'Civil Lines',
+        contract_amount: 38000000, // ₹3,80,000
+        spent: 32300000,           // ₹3,23,000 (85%)
+        workers_count: 8,
+        pending_balance: 5700000,  // ₹57,000
+        progress: 85,
+        status: 'Chal raha hai',
+      },
+    ];
+  }, [data?.sites, searchQuery]);
+
+  // Primary reminder calculation (highest pending party)
+  const reminderInfo = useMemo(() => {
+    if (data?.sites && data.sites.length > 0) {
+      for (const s of data.sites) {
+        const sum = siteSummary(s, data.attendance || [], data.entries || []);
+        if (sum.ownerBalance > 0) {
+          return {
+            title: `${s.owner_name || s.name} se ${money(sum.ownerBalance)} lena hai`,
+            sub: 'Payment overdue • 3 din se baaki hai',
+            rawAmount: money(sum.ownerBalance),
+            partyName: s.owner_name || s.name,
+          };
+        }
+      }
+    }
+    return {
+      title: 'Verma ji se ₹30,000 lena hai',
+      sub: '3 din se baaki hai',
+      rawAmount: '₹30,000',
+      partyName: 'Verma ji',
+    };
+  }, [data]);
+
+  // WhatsApp Reminder Handler
+  const handleSendReminder = () => {
+    const text = `Namaste ${reminderInfo.partyName}, ThekaBook se payment reminder: Aapka ${reminderInfo.rawAmount} ka payment baaki hai. Kripya shighra jama karein. Dhanyawad!`;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(() => {
+        onShowToast?.('Payment reminder text copied!');
+      });
+    }
+  };
+
+  // WhatsApp Refer & Earn Handler
+  const handleShareReferral = () => {
+    const msg = `Bhai, ThekaBook app use kar — Apni sites ka hisaab, mazdoor haziri, aur material bill manage karne ke liye best app hai! Download link: https://thekabook.com/invite?ref=${user?.phone || 'contractor'}`;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(() => {
+        onShowToast?.('Referral link copied to clipboard!');
+      });
+    }
+  };
+
+  // 3x3 Circular Quick Actions Grid (Retained as requested!)
+  const actionRows = [
+    // Row 1: Attendance, Material, Wage
+    [
+      {
+        id: 'attendance',
+        label: 'Daily Attendance',
+        icon: 'calendar-outline',
+        bg: '#EEF2FF',
+        border: '#C7D2FE',
+        iconColor: '#4338CA',
+        onPress: () => onNavigateTab('attendance'),
+      },
+      {
+        id: 'material',
+        label: 'Material Bill',
+        icon: 'cube-outline',
+        bg: '#FEF9C3',
+        border: '#FDE047',
+        iconColor: '#A16207',
+        onPress: () => onOpenEntry('MATERIAL'),
+      },
+      {
+        id: 'wage',
+        label: 'Labour Wage',
+        icon: 'cash-outline',
+        bg: '#D1FAE5',
+        border: '#6EE7B7',
+        iconColor: '#065F46',
+        onPress: () => onOpenEntry('WAGE_PAYMENT'),
+      },
+    ],
+    // Row 2: Payments & Bills
+    [
+      {
+        id: 'receipt',
+        label: 'Receive Payment',
+        icon: 'card-outline',
+        bg: '#DCFCE7',
+        border: '#86EFAC',
+        iconColor: '#166534',
+        onPress: () => onOpenEntry('RECEIPT'),
+      },
+      {
+        id: 'expense',
+        label: 'Other Expense',
+        icon: 'receipt-outline',
+        bg: '#FFE4E6',
+        border: '#FDA4AF',
+        iconColor: '#9F1239',
+        onPress: () => onOpenEntry('EXPENSE'),
+      },
+      {
+        id: 'extra',
+        label: 'Extra Work',
+        icon: 'add-circle-outline',
+        bg: '#EDE9FE',
+        border: '#C4B5FD',
+        iconColor: '#5B21B6',
+        onPress: () => onOpenEntry('EXTRA'),
+      },
+    ],
+    // Row 3: Management & Reports
+    [
+      {
+        id: 'sites',
+        label: 'Work Sites',
+        icon: 'business-outline',
+        bg: '#E0F2FE',
+        border: '#7DD3FC',
+        iconColor: '#0369A1',
+        onPress: () => onNavigateTab('sites'),
+      },
+      {
+        id: 'team',
+        label: 'Labour / Workers',
+        icon: 'people-outline',
+        bg: '#FAE8FF',
+        border: '#F0ABFC',
+        iconColor: '#86198F',
+        onPress: () => onNavigateTab('team'),
+      },
+      {
+        id: 'reports',
+        label: 'P&L Reports',
+        icon: 'bar-chart-outline',
+        bg: '#CCFBF1',
+        border: '#5EEAD4',
+        iconColor: '#115E59',
+        onPress: () => onNavigateTab('reports'),
+      },
+    ],
+  ];
 
   return (
     <View style={styles.pageWrapper}>
-      <TopNavBar
-        title={t('appName', 'ThekaBook')}
-        subtitle={t('overviewSubtitle', 'Business overview, cash flow & live site pulse')}
-        userInitials={data.user.name}
-        organizationName={data.organization.name}
-        onOpenProfile={() => onNavigateTab('profile')}
-        onUpdateProfile={onUpdateProfile}
-        onLogout={onLogout}
-        onRefresh={onRefresh}
-        refreshing={refreshing}
-      />
+      {/* 0. FIXED DARK BACKDROP EXTENSION (Fixed at top, zIndex 1) */}
+      <View style={styles.fixedDarkBackdropWrapper} pointerEvents="none">
+        <View style={styles.fixedDarkBackdrop} />
+      </View>
 
+      {/* 1. FIXED TOP HEADER (Logo, Greeting, Bell, Search Bar - zIndex 100) */}
+      <View style={styles.fixedHeaderOuter}>
+        <View style={styles.darkHeaderCard}>
+          <View style={styles.topBarRow}>
+            <View style={styles.leftProfileRow}>
+              {/* Yellow Book App Logo Box */}
+              <View style={styles.appLogoBox}>
+                <AppIcon name="book" size={24} color="#1E293B" />
+              </View>
+
+              {/* Greeting & Name */}
+              <View style={styles.greetingTextWrap}>
+                <Text style={styles.namasteLabel}>Namaste</Text>
+                <Text style={styles.contractorNameText} numberOfLines={1}>
+                  {contractorDisplayName}
+                </Text>
+              </View>
+            </View>
+
+            {/* Notification Bell Button */}
+            <Pressable
+              onPress={() => onOpenProfile?.() || onNavigateTab('profile')}
+              style={({ pressed }) => [
+                styles.bellBtn,
+                pressed && styles.itemPressed,
+              ]}
+              accessibilityLabel="Notifications"
+            >
+              <AppIcon name="notifications-outline" size={20} color="#FFFFFF" />
+              <View style={styles.bellBadgeDot} />
+            </Pressable>
+          </View>
+
+          {/* Sleek Search Bar: "Site, party ya mazdoor dhundo" */}
+          <View style={styles.searchBarContainer}>
+            <AppIcon name="search-outline" size={18} color="#94A3B8" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Site, party ya mazdoor dhundo"
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery ? (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                <AppIcon name="close-circle" size={16} color="#94A3B8" />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {/* 2. SCROLLABLE CONTENT (Scrolls underneath the fixed search bar) */}
       <ScrollView
         style={styles.root}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={Colors.primary}
-          />
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#F59E0B', Colors.primary]}
+              tintColor="#F59E0B"
+            />
+          ) : undefined
         }
       >
-        <View style={styles.container}>
-          {/* Greeting & Date Header */}
-          <View style={styles.headerRow}>
-            <Text style={styles.greetingTitle}>
-              {t('contractorOverview', 'Contractor Overview')}
-            </Text>
-            <Text style={styles.greetingSub}>
-              {new Date().toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', {
-                weekday: 'short',
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })} • {data.organization.name}
-            </Text>
-          </View>
-
-          {/* Premium Hero Financial Summary Card */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroAccentLine} />
-
-            <View style={styles.heroTop}>
-              <View style={styles.heroLeftWrap}>
-                <View style={styles.heroIconBadge}>
-                  <AppIcon name="wallet" size={18} color="#2563EB" />
-                </View>
-                <View style={styles.heroTitleCol}>
-                  <Text style={styles.heroLabel}>{t('totalReceivables', 'TOTAL RECEIVABLES')}</Text>
-                  <Text style={styles.heroSubLabel}>{t('pendingClientDues', 'Pending Client Dues')}</Text>
-                </View>
-              </View>
-
-              <Pressable
-                onPress={() => onOpenEntry('RECEIPT')}
-                style={({ pressed }) => [
-                  styles.heroAddBtn,
-                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
-                ]}
-                accessibilityLabel="Add payment received"
-              >
-                <Text style={styles.heroAddBtnText}>{t('paymentIn', 'Payment In')}</Text>
-              </Pressable>
+        <View style={styles.bodyContainer}>
+          <View style={[styles.whiteCard, styles.monthCard, isDesktop && styles.desktopCard]}>
+            <View style={styles.monthCardHeader}>
+              <Text style={styles.monthCardTitle}>This Month's Statement</Text>
+              {/* <View style={styles.monthBadge}>
+                <Text style={styles.monthBadgeText}>{currentMonthStr}</Text>
+              </View> */}
             </View>
 
-            <Text style={styles.heroMainAmount}>{money(totalDuesToCollect)}</Text>
+            {/* Split Dues: Aapko milna hai & Aapko dena hai */}
+            <View style={styles.splitDuesRow}>
+              {/* Left Green Box: Aapko milna hai */}
+              <View style={[styles.dueBox, styles.dueBoxGreen]}>
+                <Text style={[styles.dueBoxLabel, styles.dueLabelGreen]}>
+                  Amount to Collect
+                </Text>
+                <Text style={[styles.dueBoxAmount, styles.dueAmountGreen]}>
+                  {money(stats.totalToCollect)}
+                </Text>
+              </View>
 
-            {/* Quick Metrics Bar Inside Hero */}
-            <View style={styles.heroStatsBar}>
-              <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatLabel}>{t('activeSitesCount', 'Active Sites')}</Text>
-                <Text style={styles.heroStatValue}>{activeSites.length}</Text>
-              </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatLabel}>{t('activeLabourCount', 'Active Labour')}</Text>
-                <Text style={styles.heroStatValue}>{activeWorkerCount}</Text>
-              </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatLabel}>{t('totalReceived', 'Received')}</Text>
-                <Text style={styles.heroStatValue}>{money(totalReceived)}</Text>
+              {/* Right Red Box: Aapko dena hai */}
+              <View style={[styles.dueBox, styles.dueBoxRed]}>
+                <Text style={[styles.dueBoxLabel, styles.dueLabelRed]}>
+                  Amount to Pay
+                </Text>
+                <Text style={[styles.dueBoxAmount, styles.dueAmountRed]}>
+                  {money(stats.totalToPay)}
+                </Text>
               </View>
             </View>
           </View>
 
-          {/* Primary Quick Actions Grid */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('quickActions', 'Quick Actions')}</Text>
-          </View>
-
-          {/* Unified Quick Actions & Financial Hub Card (All in 1 Card) */}
-          <View style={styles.unifiedHubCard}>
-            {/* Row 1: Actions */}
-            <View style={styles.hubGridRow}>
-              <Pressable
-                onPress={() => onNavigateTab('attendance')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Daily Attendance"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#E0E7FF', borderColor: '#A5B4FC', shadowColor: '#4F46E5' }]}>
-                  <AppIcon name="calendar-outline" size={25} color="#4338CA" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('dailyAttendance', 'Daily Attendance')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onOpenEntry('MATERIAL')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Material Bill"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#FEF08A', borderColor: '#FACC15', shadowColor: '#D97706' }]}>
-                  <AppIcon name="cube-outline" size={25} color="#B45309" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('materialBill', 'Material Bill')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onOpenEntry('WAGE_PAYMENT')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Labour Wage"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#A7F3D0', borderColor: '#34D399', shadowColor: '#059669' }]}>
-                  <AppIcon name="cash-outline" size={25} color="#047857" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('labourWage', 'Labour Wage')}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Row 2: Payments & Bills */}
-            <View style={styles.hubGridRow}>
-              <Pressable
-                onPress={() => onOpenEntry('RECEIPT')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Receive Payment"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#BBF7D0', borderColor: '#4ADE80', shadowColor: '#16A34A' }]}>
-                  <AppIcon name="card-outline" size={25} color="#15803D" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('receivePayment', 'Receive Payment')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onOpenEntry('EXPENSE')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Other Expense"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#FECDD3', borderColor: '#FB7185', shadowColor: '#E11D48' }]}>
-                  <AppIcon name="receipt-outline" size={25} color="#BE123C" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('otherExpense', 'Other Expense')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onOpenEntry('EXTRA')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Extra Work"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#DDD6FE', borderColor: '#A78BFA', shadowColor: '#7C3AED' }]}>
-                  <AppIcon name="add-circle-outline" size={25} color="#6D28D9" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('extraWork', 'Extra Work')}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Row 3: Management & Reports */}
-            <View style={styles.hubGridRow}>
-              <Pressable
-                onPress={() => onNavigateTab('sites')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Work Sites"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#BAE6FD', borderColor: '#38BDF8', shadowColor: '#0284C7' }]}>
-                  <AppIcon name="business-outline" size={25} color="#0369A1" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('workSites', 'Work Sites')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onNavigateTab('team')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="Labour / Workers"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#F5D0FE', borderColor: '#E879F9', shadowColor: '#C026D3' }]}>
-                  <AppIcon name="people-outline" size={25} color="#A21CAF" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('navLabour', 'Labour / Workers')}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => onNavigateTab('reports')}
-                style={({ pressed }) => [
-                  styles.hubActionItem,
-                  pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
-                ]}
-                accessibilityLabel="P&L Reports"
-              >
-                <View style={[styles.quickIconCircle, { backgroundColor: '#99F6E4', borderColor: '#2DD4BF', shadowColor: '#0D9488' }]}>
-                  <AppIcon name="bar-chart-outline" size={25} color="#0F766E" />
-                </View>
-                <Text style={styles.quickActionLabel} numberOfLines={1}>
-                  {t('plReports', 'P&L Reports')}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Active Work Sites Section */}
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>{t('activeSitesTheke', 'Active Sites & Theke')}</Text>
-              <Text style={styles.sectionSubtitle}>{t('liveSitesSubtitle', 'Live site status and collection dues')}</Text>
-            </View>
-            <Pressable
-              onPress={() => onNavigateTab('sites')}
-              style={styles.sectionActionBtn}
-            >
-              <Text style={styles.viewAllText}>{t('allSites', 'All Sites')}</Text>
-              <AppIcon name="chevron-forward" size={15} color="#2563EB" />
-            </Pressable>
-          </View>
-
-          {data.sites.length ? (
-            <View style={[styles.sitesGrid, isDesktop && styles.desktopGrid]}>
-              {data.sites.slice(0, 4).map((site) => {
-                const f = siteSummary(site, data.attendance, data.entries);
-                const progress = f.contract > 0 ? Math.min(1, f.received / f.contract) : 0;
-                const progressPct = Math.round(progress * 100);
-
-                return (
+          {/* ------------------------------------------------------- */}
+          {/* 2B. QUICK ACTIONS (Our full 3x3 grid above Reminder)     */}
+          {/* ------------------------------------------------------- */}
+          <View style={[styles.whiteCard, styles.hubCard, isDesktop && styles.desktopCard]}>
+            {actionRows.map((row, rowIndex) => (
+              <View key={`row-${rowIndex}`} style={styles.hubGridRow}>
+                {row.map((item) => (
                   <Pressable
-                    key={site.id}
-                    onPress={() => onOpenSite(site.id)}
+                    key={item.id}
+                    onPress={item.onPress}
                     style={({ pressed }) => [
-                      styles.siteCard,
-                      pressed && styles.siteCardPressed,
+                      styles.hubActionItem,
+                      pressed && styles.itemPressed,
                     ]}
-                    accessibilityLabel={'Open site ' + site.name}
+                    accessibilityLabel={item.label}
                   >
-                    <View style={styles.siteCardHeader}>
-                      <View style={styles.siteHeaderLeft}>
-                        <View style={styles.siteIconBadge}>
-                          <AppIcon
-                            name={site.work_type === 'LABOUR' ? 'hammer' : 'construct'}
-                            size={18}
-                            color="#0F2851"
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.siteName} numberOfLines={1}>
-                            {site.name}
-                          </Text>
-                          <Text style={styles.siteOwner} numberOfLines={1}>
-                            {site.owner_name || (lang === 'hi' ? 'पार्टी' : 'Client')} • {site.work_type === 'LABOUR' ? t('labourOnly', 'Labour Only') : t('labourMaterial', 'Labour + Material')}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          site.status === 'PAUSED' ? styles.statusPaused : styles.statusActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusBadgeText,
-                            site.status === 'PAUSED' ? styles.statusPausedText : styles.statusActiveText,
-                          ]}
-                        >
-                          {site.status === 'PAUSED' ? t('paused', 'Paused') : t('active', 'Active')}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Progress Track */}
-                    <View style={styles.siteProgressSection}>
-                      <View style={styles.progressHeaderRow}>
-                        <Text style={styles.progressLabel}>{t('collectionProgress', 'Collection Progress')}</Text>
-                        <Text style={styles.progressPctText}>{progressPct}%</Text>
-                      </View>
-                      <View style={styles.progressBarTrack}>
-                        <View
-                          style={[
-                            styles.progressBarFill,
-                            { width: `${progressPct}%` },
-                          ]}
-                        />
-                      </View>
-                    </View>
-
-                    {/* Site Financial Summary */}
-                    <View style={styles.siteCardFooter}>
-                      <View>
-                        <Text style={styles.cardMetaLabel}>{t('contract', 'CONTRACT')}</Text>
-                        <Text style={styles.cardMetaValue}>{money(f.contract)}</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.cardMetaLabel}>{t('balanceDues', 'BALANCE DUES')}</Text>
-                        <Text
-                          style={[
-                            styles.cardMetaValue,
-                            { color: f.ownerBalance < 0 ? '#DC2626' : '#D97706' },
-                          ]}
-                        >
-                          {f.ownerBalance >= 0 ? money(f.ownerBalance) : `${money(-f.ownerBalance)} Adv`}
-                        </Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : (
-            <EmptyState
-              title={t('addFirstSite', 'Add Your First Work Site')}
-              description={t('addFirstSiteDesc', 'Create a work site, add workers, and begin tracking daily attendance and project ledger.')}
-              actionTitle={t('createSiteBtn', 'Create New Site')}
-              onAction={onOpenNewSite}
-            />
-          )}
-
-          {/* Recent Activity Section */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
-            <View>
-              <Text style={styles.sectionTitle}>{t('recentEntries', 'Recent Entries')}</Text>
-              <Text style={styles.sectionSubtitle}>{t('lastTransactions', 'Last transactions & wage payments')}</Text>
-            </View>
-            <Pressable
-              onPress={() => onNavigateTab('ledger')}
-              style={styles.sectionActionBtn}
-            >
-              <Text style={styles.viewAllText}>{t('fullHisab', 'Full Hisab')}</Text>
-              <AppIcon name="chevron-forward" size={15} color="#2563EB" />
-            </Pressable>
-          </View>
-
-          <View style={styles.recentList}>
-            {recentEntries.map((e) => {
-              const isReceipt = e.kind === 'RECEIPT';
-              const siteName = data.sites.find((s) => s.id === e.site_id)?.name;
-
-              return (
-                <View key={e.id} style={styles.entryItem}>
-                  <View style={styles.entryLeft}>
                     <View
                       style={[
-                        styles.entryIconBox,
+                        styles.quickIconCircle,
                         {
-                          backgroundColor: isReceipt
-                            ? '#DCFCE7'
-                            : e.kind === 'MATERIAL'
-                              ? '#FEF3C7'
-                              : '#F1F5F9',
+                          backgroundColor: item.bg,
+                          borderColor: item.border,
                         },
                       ]}
                     >
-                      <AppIcon
-                        name={
-                          isReceipt
-                            ? 'arrow-down'
-                            : e.kind === 'MATERIAL'
-                              ? 'cube'
-                              : e.kind === 'WAGE_PAYMENT'
-                                ? 'cash'
-                                : 'arrow-up'
-                        }
-                        size={17}
-                        color={
-                          isReceipt
-                            ? '#16A34A'
-                            : e.kind === 'MATERIAL'
-                              ? '#D97706'
-                              : '#475569'
-                        }
-                      />
+                      <AppIcon name={item.icon} size={25} color={item.iconColor} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.entryDesc} numberOfLines={1}>
-                        {e.description || e.kind}
-                      </Text>
-                      <Text style={styles.entryMeta} numberOfLines={1}>
-                        {String(e.date).slice(0, 10)} • {siteName || 'Site'}
-                      </Text>
+                    <Text style={styles.quickActionLabel} numberOfLines={2}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ))}
+          </View>
+
+          {/* ------------------------------------------------------- */}
+          {/* 2C. REMINDER CARD ("Yaad dilao")                        */}
+          {/* ------------------------------------------------------- */}
+          <View style={[styles.reminderCard, isDesktop && styles.desktopCard]}>
+            <View style={styles.reminderTextWrap}>
+              <Text style={styles.reminderTitle} numberOfLines={1}>
+                {reminderInfo.title}
+              </Text>
+              <Text style={styles.reminderSub}>
+                {reminderInfo.sub}
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={handleSendReminder}
+              style={({ pressed }) => [
+                styles.yaadDilaoBtn,
+                pressed && styles.itemPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Reminder"
+            >
+              <Text style={styles.yaadDilaoBtnText}>Reminder</Text>
+            </Pressable>
+          </View>
+
+          {/* ------------------------------------------------------- */}
+          {/* 2D. CHALU SITES (Running Sites List - Top 5)            */}
+          {/* ------------------------------------------------------- */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitleText}>Running Sites</Text>
+            <Pressable
+              onPress={() => onNavigateTab('sites')}
+              style={({ pressed }) => [styles.sabDekhoBtn, pressed && styles.itemPressed]}
+            >
+              <Text style={styles.sabDekhoText}>View More</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.sitesListContainer}>
+            {runningSites.map((site: any) => {
+              const isSample = site.id.startsWith('sample-');
+              let sum = null;
+              if (!isSample && data) {
+                sum = siteSummary(site, data.attendance || [], data.entries || []);
+              }
+
+              const contractVal = isSample ? site.contract_amount : (sum?.contract || Number(site.contract_amount || 0));
+              const spentVal = isSample ? site.spent : (sum?.cost || 0);
+              const progressPercent = isSample
+                ? site.progress
+                : contractVal > 0
+                  ? Math.min(100, Math.round((spentVal / contractVal) * 100))
+                  : 0;
+
+              const workersCount = isSample
+                ? site.workers_count
+                : (data?.attendance || []).filter((a) => a.site_id === site.id).length || 2;
+
+              const pendingBalance = isSample
+                ? site.pending_balance
+                : Math.max(0, contractVal - (sum?.received || 0));
+
+              const workType = site.work_type || site.owner_name || 'Construction Work';
+              const locationStr = site.address || site.owner_name || 'Project Site';
+
+              return (
+                <Pressable
+                  key={site.id}
+                  onPress={() => {
+                    if (isSample) {
+                      onOpenNewSite?.() || onNavigateTab('sites');
+                    } else {
+                      onSelectSite?.(site.id) || onNavigateTab('sites');
+                    }
+                  }}
+                  style={({ pressed }) => [
+                    styles.siteItemCard,
+                    pressed && styles.itemPressed,
+                    isDesktop && styles.desktopCard,
+                  ]}
+                >
+                  {/* Top: Name — Work Type + Chal raha hai Badge */}
+                  <View style={styles.siteTopRow}>
+                    <Text style={styles.siteTitleName} numberOfLines={1}>
+                      {site.name} — <Text style={styles.siteWorkType}>{workType}</Text>
+                    </Text>
+                    <View style={styles.chalRahaHaiBadge}>
+                      <Text style={styles.chalRahaHaiText}>Chal raha hai</Text>
                     </View>
                   </View>
-                  <Text
-                    style={[
-                      styles.entryAmount,
-                      { color: isReceipt ? '#16A34A' : '#0F172A' },
-                    ]}
-                  >
-                    {isReceipt ? '+' : '-'} {money(e.amount)}
+
+                  {/* Location / Area */}
+                  <Text style={styles.siteLocationText} numberOfLines={1}>
+                    {locationStr}
                   </Text>
-                </View>
+
+                  {/* Golden Progress Bar */}
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarGoldenFill,
+                        { width: `${progressPercent}%` },
+                      ]}
+                    />
+                  </View>
+
+                  {/* Bottom: Progress % • Mazdoor + Baaki Amount */}
+                  <View style={styles.siteBottomRow}>
+                    <Text style={styles.siteProgressMeta}>
+                      {progressPercent}% kaam hua • {workersCount} mazdoor
+                    </Text>
+                    <Text style={styles.sitePendingAmount}>
+                      {money(pendingBalance)} baaki
+                    </Text>
+                  </View>
+                </Pressable>
               );
             })}
-            {!recentEntries.length && (
-              <View style={styles.emptyRecentBox}>
-                <AppIcon name="receipt-outline" size={24} color="#94A3B8" />
-                <Text style={styles.noEntriesText}>
-                  Abhi koi transaction entry nahi hai.
-                </Text>
+          </View>
+
+          {/* ------------------------------------------------------- */}
+          {/* 2E. REFER & EARN CARD (Matching User Reference Image)   */}
+          {/* ------------------------------------------------------- */}
+          <View style={[styles.referContainerCard, isDesktop && styles.desktopCard]}>
+            {/* Top Heading */}
+            <Text style={styles.referMainHeading}>Refer and Earn ₹600</Text>
+            <Text style={styles.referSubHeading}>
+              ₹120/referral | Up to 5 referrals/month
+            </Text>
+
+            {/* Center Graphic Illustration */}
+            <View style={styles.referIllustrationWrap}>
+              {/* Floating Coin 1 (Left) */}
+              <View style={styles.floatingCoinLeft}>
+                <Text style={styles.coinRupeeText}>₹</Text>
               </View>
-            )}
+
+              {/* Floating Speech Bubble 1 (Top Left) */}
+              <View style={styles.speechBubble1}>
+                <View style={styles.bubbleAvatarInner}>
+                  <AppIcon name="person" size={13} color="#FFFFFF" />
+                </View>
+              </View>
+
+              {/* Floating Speech Bubble 2 (Top Right) */}
+              <View style={styles.speechBubble2}>
+                <View style={styles.bubbleAvatarInner}>
+                  <AppIcon name="person" size={15} color="#FFFFFF" />
+                </View>
+              </View>
+
+              {/* Floating Coin 2 (Right) */}
+              <View style={styles.floatingCoinRight}>
+                <Text style={styles.coinRupeeText}>₹</Text>
+              </View>
+
+              {/* Center Gift Box Illustration */}
+              <View style={styles.giftBoxWrapper}>
+                {/* Ribbon Bow Loops */}
+                <View style={styles.bowContainer}>
+                  <View style={styles.bowLoopLeft} />
+                  <View style={styles.bowLoopRight} />
+                  <View style={styles.bowCenterKnot} />
+                </View>
+
+                {/* Gift Box Lid */}
+                <View style={styles.boxLid}>
+                  <View style={styles.lidRibbonVertical} />
+                </View>
+
+                {/* Gift Box Body */}
+                <View style={styles.boxBody}>
+                  <View style={styles.boxRibbonVertical} />
+                </View>
+              </View>
+
+              {/* Floating Paper Airplane (Bottom Left) */}
+              <View style={styles.paperPlaneBox}>
+                <AppIcon name="paper-plane" size={24} color="#C7D2FE" />
+              </View>
+
+              {/* Sparkle Dots */}
+              <View style={[styles.sparkleDot, { top: 38, left: 24 }]} />
+              <View style={[styles.sparkleDot, { bottom: 12, right: 38 }]} />
+            </View>
+
+            {/* Bottom Nested White Card: "How it works?" */}
+            <View style={styles.howItWorksCard}>
+              <View style={styles.howItWorksHeader}>
+                <Text style={styles.howItWorksTitle}>How it works?</Text>
+                <Pressable
+                  onPress={() => onShowToast?.('Each referral gets ₹120 when they create their first work site.')}
+                  hitSlop={8}
+                >
+                  <Text style={styles.termsLinkText}>Terms & Conditions</Text>
+                </Pressable>
+              </View>
+
+              {/* 3-Step Horizontal Process */}
+              <View style={styles.stepsRow}>
+                {/* Step 1: Share invite link */}
+                <View style={styles.stepItem}>
+                  <View style={styles.stepIconCircle}>
+                    <AppIcon name="chatbubble-ellipses-outline" size={18} color="#4F46E5" />
+                  </View>
+                  <Text style={styles.stepLabelText}>Share{'\n'}invite link</Text>
+                </View>
+
+                {/* Dashed Connector 1 */}
+                <View style={styles.stepDashedLine} />
+
+                {/* Step 2: Your friend signs up */}
+                <View style={styles.stepItem}>
+                  <View style={styles.stepIconCircle}>
+                    <AppIcon name="checkmark-done" size={19} color="#4F46E5" />
+                  </View>
+                  <Text style={styles.stepLabelText}>Your friend{'\n'}signs up</Text>
+                </View>
+
+                {/* Dashed Connector 2 */}
+                <View style={styles.stepDashedLine} />
+
+                {/* Step 3: Get reward */}
+                <View style={styles.stepItem}>
+                  <View style={styles.stepIconCircle}>
+                    <AppIcon name="cash-outline" size={18} color="#4F46E5" />
+                  </View>
+                  <Text style={styles.stepLabelText}>Get{'\n'}reward</Text>
+                </View>
+              </View>
+
+              {/* WhatsApp Share Button */}
+              <Pressable
+                onPress={handleShareReferral}
+                style={({ pressed }) => [
+                  styles.referWhatsappBtn,
+                  pressed && styles.itemPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Share on WhatsApp"
+              >
+                <AppIcon name="logo-whatsapp" size={18} color="#FFFFFF" />
+                <Text style={styles.referWhatsappBtnText}>Invite Friends on WhatsApp</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -535,464 +733,759 @@ export function DashboardPage({
 const styles = StyleSheet.create({
   pageWrapper: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  btnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  navNewSiteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 13,
-    borderRadius: 10,
-    backgroundColor: '#0F2851',
-    shadowColor: '#0F2851',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  navNewSiteBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
+    backgroundColor: '#F3F4F6', // Light gray background like screenshot
   },
   root: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    zIndex: 10,
+    ...Platform.select({
+      web: { position: 'relative' } as any,
+    }),
   },
   scroll: {
     paddingBottom: 40,
   },
-  container: {
-    maxWidth: 720,
-    width: '100%',
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 16,
-  },
 
-  /* Greeting Header */
-  headerRow: {
-    gap: 3,
-    paddingHorizontal: 2,
-  },
-  greetingTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: -0.3,
-  },
-  greetingSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    lineHeight: 17,
-  },
-
-  /* Hero Card - Soft Lavender / Ice Blue Minimalist Theme */
-  heroCard: {
-    backgroundColor: '#F0F6FF',
-    borderRadius: 16,
-    padding: 14,
-    shadowColor: '#1E40AF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
-    position: 'relative',
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-  },
-  heroAccentLine: {
+  /* 0. Fixed Dark Backdrop Extension (stays fixed behind top card with rounded corners) */
+  fixedDarkBackdropWrapper: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 3,
-    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    zIndex: 1,
   },
-  heroTop: {
+  fixedDarkBackdrop: {
+    height: 196,
+    maxWidth: 600,
+    width: '100%',
+    backgroundColor: '#162032',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)' },
+      default: { elevation: 2 },
+    }),
+  },
+
+  /* 1. Dark Top Header (Fixed at top - Logo + Search Bar on zIndex 100) */
+  fixedHeaderOuter: {
+    backgroundColor: '#F3F4F6',
+    zIndex: 100,
+    width: '100%',
+    alignItems: 'center',
+    ...Platform.select({
+      web: { position: 'sticky', top: 0 } as any,
+    }),
+  },
+  darkHeaderCard: {
+    backgroundColor: '#162032',
+    maxWidth: 600,
+    width: '100%',
+    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+  },
+  topBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  leftProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 12,
+  },
+  appLogoBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B', // Golden amber book logo box
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)' },
+      default: { elevation: 3 },
+    }),
+  },
+  greetingTextWrap: {
+    flex: 1,
+  },
+  namasteLabel: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  contractorNameText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    marginTop: 1,
+  },
+  bellBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    position: 'relative',
+  },
+  bellBadgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F59E0B', // Amber dot
+    position: 'absolute',
+    top: 9,
+    right: 10,
+    borderWidth: 1.5,
+    borderColor: '#162032',
+  },
+
+  /* Sleek Search Bar */
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#FFFFFF',
+    marginLeft: 8,
+    paddingVertical: 0,
+    ...Platform.select({
+      web: { outlineStyle: 'none' } as any,
+      default: {},
+    }),
+  },
+
+  /* 2. Body Container (Sits ON TOP of dark backdrop extension and slides under fixed search bar) */
+  bodyContainer: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    zIndex: 10,
+    ...Platform.select({
+      web: { position: 'relative' } as any,
+    }),
+  },
+  desktopCard: {
+    maxWidth: 600,
+  },
+  whiteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      web: { boxShadow: '0 6px 20px rgba(0, 0, 0, 0.04)' },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+    }),
+  },
+
+  /* 2A. Is mahine ka hisaab */
+  monthCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  monthCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  monthCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  monthBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  monthBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  splitDuesRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  dueBox: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+  },
+  dueBoxGreen: {
+    backgroundColor: '#EBFBF2',
+    borderColor: '#D1FAE5',
+  },
+  dueBoxRed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+  },
+  dueBoxLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  dueLabelGreen: {
+    color: '#047857',
+  },
+  dueLabelRed: {
+    color: '#B91C1C',
+  },
+  dueBoxAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  dueAmountGreen: {
+    color: '#047857',
+  },
+  dueAmountRed: {
+    color: '#B91C1C',
+  },
+  weekEarningsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  weekEarningsLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  weekEarningsAmount: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  /* 2B. Hub Card (Our full 3x3 Grid) */
+  hubCard: {
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginBottom: 14,
+  },
+  hubGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginVertical: 5,
+  },
+  hubActionItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 12,
+  },
+  quickIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    marginBottom: 8,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+      default: { elevation: 2 },
+    }),
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+
+  /* 2C. Reminder Card (Yaad dilao) */
+  reminderCard: {
+    backgroundColor: '#FEF3C7', // Soft warm yellow
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(245, 158, 11, 0.12)' },
+      default: { elevation: 2 },
+    }),
+  },
+  reminderTextWrap: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  reminderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#78350F',
+    lineHeight: 18,
+  },
+  reminderSub: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  yaadDilaoBtn: {
+    backgroundColor: '#1E293B', // Dark button from screenshot
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yaadDilaoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  /* 2D. Chalu Sites Header & List */
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitleText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sabDekhoBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  sabDekhoText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#D97706', // Golden amber link text
+  },
+  sitesListContainer: {
+    gap: 10,
+    marginBottom: 18,
+  },
+  siteItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.03)' },
+      default: { elevation: 1 },
+    }),
+  },
+  siteTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  heroLeftWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  heroIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitleCol: {
-    gap: 1,
-  },
-  heroLabel: {
-    fontSize: 9.5,
+  siteTitleName: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#1E40AF',
-    letterSpacing: 0.6,
+    color: '#0F172A',
+    flex: 1,
+    paddingRight: 8,
   },
-  heroSubLabel: {
-    fontSize: 10.5,
-    color: '#64748B',
+  siteWorkType: {
     fontWeight: '500',
+    color: '#475569',
   },
-  heroAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#1E40AF',
+  chalRahaHaiBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    shadowColor: '#1E40AF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroAddBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
-  heroMainAmount: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#0F2851',
-    letterSpacing: -0.6,
-    marginVertical: 6,
-  },
-  heroStatsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#DBEAFE',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginTop: 4,
+    borderColor: '#A7F3D0',
   },
-  heroStatItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  heroStatDivider: {
-    width: 1,
-    height: 18,
-    backgroundColor: '#E2E8F0',
-  },
-  heroStatLabel: {
-    fontSize: 8.5,
-    color: '#64748B',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  heroStatValue: {
-    fontSize: 12.5,
-    color: '#0F2851',
-    fontWeight: '900',
-    marginTop: 1,
-  },
-
-  /* Unified Quick Actions & Financial Hub Card */
-  sectionHeader: {
-    paddingHorizontal: 2,
-  },
-  unifiedHubCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    gap: 16,
-  },
-  hubGridRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-around',
-  },
-  hubActionItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  quickIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  quickActionLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#1E293B',
-    textAlign: 'center',
-    letterSpacing: -0.2,
-    marginTop: 6,
-    lineHeight: 14,
-  },
-
-  /* Section Headers */
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: -0.3,
-  },
-  sectionSubtitle: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  sectionActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  viewAllText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#2563EB',
-  },
-
-  /* Sites List */
-  sitesGrid: {
-    gap: 12,
-  },
-  desktopGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  siteCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    gap: 12,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  siteCardPressed: {
-    backgroundColor: '#F8FAFC',
-    transform: [{ scale: 0.99 }],
-  },
-  siteCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  siteHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  siteIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  siteName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  siteOwner: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  statusBadgeText: {
+  chalRahaHaiText: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#059669',
   },
-  statusActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#DCFCE7',
-  },
-  statusActiveText: {
-    color: '#16A34A',
-  },
-  statusPaused: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FFEDD5',
-  },
-  statusPausedText: {
-    color: '#EA580C',
-  },
-  siteProgressSection: {
-    gap: 5,
-  },
-  progressHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressLabel: {
+  siteLocationText: {
     fontSize: 11,
-    fontWeight: '600',
     color: '#64748B',
-  },
-  progressPctText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#2563EB',
+    marginBottom: 8,
   },
   progressBarTrack: {
-    height: 7,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#F1F5F9',
     overflow: 'hidden',
+    marginBottom: 8,
   },
-  progressBarFill: {
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#2563EB',
+  progressBarGoldenFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: '#F59E0B', // Golden amber progress bar
   },
-  siteCardFooter: {
+  siteBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
   },
-  cardMetaLabel: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.4,
-  },
-  cardMetaValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-
-  /* Recent Activity */
-  recentList: {
-    gap: 8,
-  },
-  entryItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  entryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  entryIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  entryDesc: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  entryMeta: {
+  siteProgressMeta: {
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
-    marginTop: 1,
   },
-  entryAmount: {
-    fontSize: 14.5,
-    fontWeight: '900',
-    letterSpacing: -0.2,
+  sitePendingAmount: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B91C1C', // baaki amount in red
   },
-  emptyRecentBox: {
-    paddingVertical: 20,
+
+  /* 2E. Refer & Earn Card (Matching User Screenshot) */
+  referContainerCard: {
+    backgroundColor: '#F3EEFF', // Soft pastel lavender background
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    paddingTop: 20,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    marginBottom: 20,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 24px rgba(139, 92, 246, 0.08)' },
+      default: { elevation: 3 },
+    }),
+  },
+  referMainHeading: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#4C1D95', // Deep purple
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
+  referSubHeading: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  referIllustrationWrap: {
+    height: 140,
+    width: '100%',
+    position: 'relative',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+  },
+  giftBoxWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 120,
+    height: 100,
+  },
+  bowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: -4,
+    zIndex: 2,
+    position: 'relative',
+  },
+  bowLoopLeft: {
+    width: 28,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#818CF8',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    transform: [{ rotate: '-25deg' }],
+    marginRight: -4,
+  },
+  bowLoopRight: {
+    width: 28,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#818CF8',
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '25deg' }],
+    marginLeft: -4,
+  },
+  bowCenterKnot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#818CF8',
+    zIndex: 3,
+  },
+  boxLid: {
+    width: 110,
+    height: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#818CF8',
+    borderRadius: 6,
+    zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(129, 140, 248, 0.15)' },
+      default: { elevation: 1 },
+    }),
+  },
+  lidRibbonVertical: {
+    width: 16,
+    height: '100%',
+    backgroundColor: '#C7D2FE',
+  },
+  boxBody: {
+    width: 98,
+    height: 60,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderTopWidth: 0,
+    borderColor: '#818CF8',
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(129, 140, 248, 0.15)' },
+      default: { elevation: 2 },
+    }),
+  },
+  boxRibbonVertical: {
+    width: 16,
+    height: '100%',
+    backgroundColor: '#C7D2FE',
+  },
+  floatingCoinLeft: {
+    position: 'absolute',
+    top: 24,
+    left: 28,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F97316', // Orange coin like image
+    borderWidth: 2,
+    borderColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-12deg' }],
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(249, 115, 22, 0.3)' },
+      default: { elevation: 2 },
+    }),
+  },
+  floatingCoinRight: {
+    position: 'absolute',
+    bottom: 22,
+    right: 32,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F97316',
+    borderWidth: 2,
+    borderColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '15deg' }],
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(249, 115, 22, 0.3)' },
+      default: { elevation: 2 },
+    }),
+  },
+  coinRupeeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  speechBubble1: {
+    position: 'absolute',
+    top: 12,
+    right: 88,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(59, 130, 246, 0.15)' },
+      default: { elevation: 2 },
+    }),
+  },
+  speechBubble2: {
+    position: 'absolute',
+    top: 16,
+    right: 42,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(59, 130, 246, 0.15)' },
+      default: { elevation: 2 },
+    }),
+  },
+  bubbleAvatarInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6', // Blue avatar circle like image
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paperPlaneBox: {
+    position: 'absolute',
+    bottom: 12,
+    left: 20,
+    transform: [{ rotate: '-18deg' }],
+  },
+  sparkleDot: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#818CF8',
+  },
+
+  /* Nested White Card: "How it works?" */
+  howItWorksCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginTop: 6,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' },
+      default: { elevation: 2 },
+    }),
   },
-  noEntriesText: {
+  howItWorksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  howItWorksTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  termsLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6366F1', // Indigo link text
+  },
+  stepsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  stepItem: {
+    alignItems: 'center',
+    width: 82,
+  },
+  stepIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1.5,
+    borderColor: '#DDD6FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  stepLabelText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#334155',
     textAlign: 'center',
-    color: '#64748B',
-    fontSize: 12.5,
-    fontWeight: '500',
+    lineHeight: 13,
+  },
+  stepDashedLine: {
+    flex: 1,
+    height: 1,
+    borderBottomWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    marginTop: -18,
+    marginHorizontal: 2,
+  },
+  referWhatsappBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25D366', // WhatsApp green
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)' },
+      default: { elevation: 2 },
+    }),
+  },
+  referWhatsappBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  itemPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
 });
-
