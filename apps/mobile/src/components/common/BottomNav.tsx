@@ -14,52 +14,82 @@ interface BottomNavProps {
   tabs: TabItem[];
   activeTab: string;
   onTabPress: (key: string) => void;
+  onCenterPress?: () => void;
 }
 
-export function BottomNav({ tabs, activeTab, onTabPress }: BottomNavProps) {
+export function BottomNav({ tabs, activeTab, onTabPress, onCenterPress }: BottomNavProps) {
+  const renderTab = (tab: TabItem) => {
+    const isActive = activeTab === tab.key;
+    const activeIconName = tab.icon.endsWith('-outline')
+      ? tab.icon.replace('-outline', '')
+      : tab.icon;
+    const iconName = isActive ? activeIconName : tab.icon;
+
+    return (
+      <Pressable
+        key={tab.key}
+        onPress={() => onTabPress(tab.key)}
+        style={styles.tabItem}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive }}
+        accessibilityLabel={tab.label}
+      >
+        <View style={styles.iconWrapper}>
+          <AppIcon
+            name={iconName}
+            size={22}
+            color={isActive ? '#0F172A' : '#64748B'}
+          />
+          {tab.badge ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{tab.badge}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text
+          style={[
+            styles.label,
+            isActive ? styles.activeLabel : styles.inactiveLabel,
+          ]}
+          numberOfLines={1}
+        >
+          {tab.label}
+        </Text>
+      </Pressable>
+    );
+  };
+
+  const hasCenterFab = Boolean(onCenterPress && tabs.length === 4);
+
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          const activeIconName = tab.icon.endsWith('-outline')
-            ? tab.icon.replace('-outline', '')
-            : tab.icon;
-          const iconName = isActive ? activeIconName : tab.icon;
+        {hasCenterFab ? (
+          <>
+            {renderTab(tabs[0])}
+            {renderTab(tabs[1])}
 
-          return (
-            <Pressable
-              key={tab.key}
-              onPress={() => onTabPress(tab.key)}
-              style={styles.tabItem}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={tab.label}
-            >
-              <View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
-                <AppIcon
-                  name={iconName}
-                  size={isActive ? 23 : 21}
-                  color={isActive ? '#1D4ED8' : '#475569'}
-                />
-                {tab.badge ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{tab.badge}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text
-                style={[
-                  styles.label,
-                  isActive ? styles.activeLabel : styles.inactiveLabel,
+            {/* Center Floating Plus Button */}
+            <View style={styles.centerFabContainer}>
+              <Pressable
+                onPress={onCenterPress}
+                style={({ pressed }) => [
+                  styles.centerFab,
+                  pressed && styles.fabPressed,
                 ]}
-                numberOfLines={1}
+                accessibilityRole="button"
+                accessibilityLabel="Quick Action"
               >
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+                <AppIcon name="add" size={38} color="#1E293B" />
+              </Pressable>
+            </View>
+
+            {renderTab(tabs[2])}
+            {renderTab(tabs[3])}
+          </>
+        ) : (
+          tabs.map((tab) => renderTab(tab))
+        )}
       </View>
     </View>
   );
@@ -68,15 +98,23 @@ export function BottomNav({ tabs, activeTab, onTabPress }: BottomNavProps) {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1.5,
+    borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
     paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-    paddingTop: 8,
-    shadowColor: '#0F2851',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 12,
+    paddingTop: 6,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    ...Platform.select({
+      web: { boxShadow: '0 -4px 16px rgba(0,0,0,0.06)' },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 10,
+      },
+    }),
   },
   inner: {
     flexDirection: 'row',
@@ -85,6 +123,7 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     alignSelf: 'center',
     width: '100%',
+    paddingHorizontal: 8,
   },
   tabItem: {
     flex: 1,
@@ -93,36 +132,29 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   iconWrapper: {
-    width: 46,
-    height: 32,
+    width: 40,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
     marginBottom: 2,
     position: 'relative',
   },
-  activeIconWrapper: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-  },
   label: {
     fontSize: 11,
-    letterSpacing: 0.1,
   },
   activeLabel: {
-    fontWeight: '900',
-    color: '#1D4ED8',
+    fontWeight: '800',
+    color: '#0F172A',
   },
   inactiveLabel: {
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: '600',
+    color: '#64748B',
   },
   badge: {
     position: 'absolute',
     top: -2,
     right: 4,
-    backgroundColor: '#E65100',
+    backgroundColor: '#EF4444',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -134,5 +166,35 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 9,
     fontWeight: '800',
+  },
+  centerFabContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 72,
+  },
+  centerFab: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#F59E0B', // Golden amber like screenshot
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -28,
+    borderWidth: 3.5,
+    borderColor: '#FFFFFF',
+    ...Platform.select({
+      web: { boxShadow: '0 8px 20px rgba(245, 158, 11, 0.48)' },
+      default: {
+        shadowColor: '#F59E0B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.45,
+        shadowRadius: 10,
+        elevation: 10,
+      },
+    }),
+  },
+  fabPressed: {
+    transform: [{ scale: 0.94 }],
+    backgroundColor: '#D97706',
   },
 });
