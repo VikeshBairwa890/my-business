@@ -64,6 +64,8 @@ export class SignUpService {
           id: user.id,
           name: user.name,
           email: user.email,
+          phone: user.phone || '',
+          avatar: user.avatar || '',
           role: user.role,
           orgId: org.id,
           organizationName: org.name,

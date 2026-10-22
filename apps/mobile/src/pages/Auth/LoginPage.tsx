@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -35,6 +36,8 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const emailInputRef = useRef<TextInput>(null);
@@ -45,10 +48,55 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
     saveRememberedEmail(null).catch(() => { });
   }, []);
 
+  useEffect(() => {
+    // 1. Native Keyboard listeners (iOS / Android)
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardVisible(true);
+        const h = e.endCoordinates?.height;
+        setKeyboardHeight(h && h > 0 ? h : 280);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
+    // 2. Web VisualViewport listener (Mobile Chrome / Safari)
+    let removeVpListener: (() => void) | undefined;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.visualViewport) {
+      const onResize = () => {
+        const winH = window.innerHeight;
+        const vpH = window.visualViewport?.height || winH;
+        const diff = winH - vpH;
+        if (diff > 120) {
+          setKeyboardVisible(true);
+          setKeyboardHeight(diff);
+        } else {
+          setKeyboardVisible(false);
+          setKeyboardHeight(0);
+        }
+      };
+      window.visualViewport.addEventListener('resize', onResize);
+      removeVpListener = () => window.visualViewport?.removeEventListener('resize', onResize);
+    }
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      removeVpListener?.();
+    };
+  }, []);
+
   const handleFocus = (field: string, yOffset = 0) => {
     setFocusedField(field);
     if (yOffset > 0) {
-      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 100);
+      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 80);
+      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 260);
     }
   };
 
@@ -97,8 +145,8 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
   return (
     <SafeAreaView style={styles.root}>
       {/* Background Decorative Aura */}
-      <View style={styles.bgGlowTop} pointerEvents="none" />
-      <View style={styles.bgGlowBottom} pointerEvents="none" />
+      <View style={styles.bgGlowTop} />
+      <View style={styles.bgGlowBottom} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -107,9 +155,15 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
         <ScrollView
           ref={scrollRef}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.scrollContainer,
             isDesktop && styles.desktopScrollContainer,
+            {
+              paddingBottom: keyboardHeight > 0
+                ? keyboardHeight + 80
+                : (keyboardVisible ? 280 : 40),
+            },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -157,7 +211,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
                 <Pressable
                   onPress={() => {
                     emailInputRef.current?.focus();
-                    handleFocus('email', 20);
+                    handleFocus('email', 40);
                   }}
                   style={[
                     styles.inputField,
@@ -182,7 +236,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
                     autoCorrect={false}
                     value={email}
                     onChangeText={setEmail}
-                    onFocus={() => handleFocus('email', 20)}
+                    onFocus={() => handleFocus('email', 40)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="next"
                     onSubmitEditing={() => passwordInputRef.current?.focus()}
@@ -207,7 +261,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
                 <Pressable
                   onPress={() => {
                     passwordInputRef.current?.focus();
-                    handleFocus('password', 80);
+                    handleFocus('password', 150);
                   }}
                   style={[
                     styles.inputField,
@@ -232,7 +286,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
                     autoCorrect={false}
                     value={password}
                     onChangeText={setPassword}
-                    onFocus={() => handleFocus('password', 80)}
+                    onFocus={() => handleFocus('password', 150)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="go"
                     onSubmitEditing={handleSignIn}
@@ -312,6 +366,7 @@ const styles = StyleSheet.create({
     borderRadius: 130,
     backgroundColor: '#DBEAFE',
     opacity: 0.6,
+    pointerEvents: 'none',
   },
   bgGlowBottom: {
     position: 'absolute',
@@ -322,6 +377,7 @@ const styles = StyleSheet.create({
     borderRadius: 140,
     backgroundColor: '#E0E7FF',
     opacity: 0.5,
+    pointerEvents: 'none',
   },
   keyboardView: {
     flex: 1,

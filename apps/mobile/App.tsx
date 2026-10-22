@@ -31,6 +31,9 @@ import { LabourPage } from './src/pages/Labour';
 import { HisabPage } from './src/pages/Hisab';
 import { ReportsPage } from './src/pages/Reports';
 import { ProfilePage } from './src/pages/Profile';
+import { NotificationsPage } from './src/pages/Notifications';
+import { SettingsPage } from './src/pages/Settings';
+import { BanksPage } from './src/pages/Banks';
 import {
   MaterialBillPage,
   WagePaymentPage,
@@ -46,6 +49,7 @@ import { pdfReport, shareReport } from './src/report';
 import { FormSpec, Row, Snapshot } from './src/types';
 import { LanguageProvider, useLanguage } from './src/i18n';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { ToastProvider, showToast } from './src/context/ToastContext';
 import { AppLoader } from './src/components/common/AppLoader';
 
 function MainApp() {
@@ -109,6 +113,15 @@ function MainApp() {
       if (path === '/profile') {
         return { tab: 'profile', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
       }
+      if (path === '/notifications') {
+        return { tab: 'notifications', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
+      }
+      if (path === '/settings') {
+        return { tab: 'settings', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
+      }
+      if (path === '/banks') {
+        return { tab: 'banks', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
+      }
     }
     return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: null };
   };
@@ -125,7 +138,6 @@ function MainApp() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
   const [showFabModal, setShowFabModal] = useState(false);
   const pendingRef = useRef<{ signature: string; key: string } | null>(null);
 
@@ -171,6 +183,8 @@ function MainApp() {
         updateUser({
           name: snap.user?.name || user?.name || '',
           organizationName: snap.organization?.name || user?.organizationName || '',
+          avatar: snap.user?.avatar || user?.avatar || '',
+          phone: snap.user?.phone || user?.phone || '',
         });
       }
       setError('');
@@ -191,13 +205,6 @@ function MainApp() {
       refresh(token);
     }
   }, [token, data, refreshing]);
-
-  useEffect(() => {
-    if (toast) {
-      const id = setTimeout(() => setToast(''), 4000);
-      return () => clearTimeout(id);
-    }
-  }, [toast]);
 
   async function handleLogin(newToken: string, newUser?: UserInfo) {
     await setAuth(newToken, newUser || null);
@@ -243,7 +250,7 @@ function MainApp() {
       });
       setForm(null);
       pendingRef.current = null;
-      setToast('Saved successfully');
+      showToast('Saved successfully', 's');
       await refresh();
     } catch (e: any) {
       setError(e.message);
@@ -326,6 +333,8 @@ function MainApp() {
 
   // Handle hardware / Android system back button gracefully
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     const onHardwareBackPress = () => {
       // 1. If any modal form is open, close the modal
       if (form) {
@@ -405,7 +414,7 @@ function MainApp() {
       if (Platform.OS === 'android') {
         ToastAndroid.show(exitMsg, ToastAndroid.SHORT);
       } else {
-        setToast(exitMsg);
+        showToast(exitMsg, 'w');
       }
       return true;
     };
@@ -554,7 +563,7 @@ function MainApp() {
         key: pendingRef.current.key,
       });
       pendingRef.current = null;
-      setToast('New site created successfully');
+      showToast('New site created successfully', 's');
       await refresh();
       navigate('sites', '/sites', null, false);
     } catch (e: any) {
@@ -571,7 +580,7 @@ function MainApp() {
         await pdfReport(data, siteId);
       } else {
         const msg = await shareReport(data, siteId);
-        setToast(msg);
+        showToast(msg, 's');
       }
     } catch (e: any) {
       setError(e.message);
@@ -585,11 +594,11 @@ function MainApp() {
     bill?: Row
   ) => {
     if (!data?.sites.length) {
-      setToast(lang === 'hi' ? 'कृपया पहले एक साइट जोड़ें' : 'Please add a work site first');
+      showToast(lang === 'hi' ? 'कृपया पहले एक साइट जोड़ें' : 'Please add a work site first', 'w');
       return;
     }
     if (kind === 'WAGE_PAYMENT' && !data?.workers.length) {
-      setToast(lang === 'hi' ? 'कृपया पहले एक मजदूर (Labour) जोड़ें' : 'Please add a worker first');
+      showToast(lang === 'hi' ? 'कृपया पहले एक मजदूर (Labour) जोड़ें' : 'Please add a worker first', 'w');
       return;
     }
     setActiveEntryParams({ siteId, workerId, bill });
@@ -628,7 +637,7 @@ function MainApp() {
         key: pendingRef.current.key,
       });
       pendingRef.current = null;
-      setToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully');
+      showToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully', 's');
       await refresh();
       setActiveEntryKind(null);
       setActiveEntryParams(null);
@@ -655,7 +664,7 @@ function MainApp() {
     existing?: Row
   ) => {
     if (!data?.sites.length || !data?.workers.some((w) => w.active)) {
-      setToast('Please add an active worker and site first');
+      showToast('Please add an active worker and site first', 'w');
       return;
     }
     openForm(attendanceForm(data, siteId, workerId, existing));
@@ -676,435 +685,422 @@ function MainApp() {
       <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
         <StatusBar style="dark" />
 
-      {/* Toast notification */}
-      {toast ? (
-        <View style={styles.toastContainer}>
-          <View
-            style={[
-              styles.toast,
-              toast.toLowerCase().includes('error') || toast.toLowerCase().includes('fail')
-                ? styles.toastError
-                : toast.toLowerCase().includes('please') || toast.toLowerCase().includes('कृपया') || toast.toLowerCase().includes('add')
-                  ? styles.toastWarning
-                  : styles.toastSuccess,
-            ]}
-          >
-            <Ionicons
-              name={
-                toast.toLowerCase().includes('error') || toast.toLowerCase().includes('fail')
-                  ? 'alert-circle'
-                  : toast.toLowerCase().includes('please') || toast.toLowerCase().includes('कृपया') || toast.toLowerCase().includes('add')
-                    ? 'information-circle'
-                    : 'checkmark-circle'
-              }
-              size={18}
-              color={
-                toast.toLowerCase().includes('error') || toast.toLowerCase().includes('fail')
-                  ? '#DC2626'
-                  : toast.toLowerCase().includes('please') || toast.toLowerCase().includes('कृपया') || toast.toLowerCase().includes('add')
-                    ? '#D97706'
-                    : '#059669'
-              }
+        {/* Main Screen Content */}
+        <View style={styles.content}>
+          {tab === 'home' && !activeEntryKind && !isNewSite ? (
+            <DashboardPage
+              data={data}
+              refreshing={refreshing}
+              onRefresh={() => refresh()}
+              onNavigateTab={handleNavigate}
+              onOpenEntry={(kind, siteId, workerId) => openEntryPage(kind, siteId, workerId)}
+              onSelectSite={(siteId) => navigate('sites', `/sites/${siteId}`, siteId, false)}
+              onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
+              onOpenAttendance={(siteId) => openAttendanceModal(siteId)}
+              onShareReport={() => handleShareReport(true)}
+              onOpenProfile={() => handleNavigate('profile')}
+              onOpenNotifications={() => navigate('notifications', '/notifications', null, false)}
+              onLogout={handleLogout}
+              onShowToast={(msg, type) => showToast(msg, type as any)}
             />
-            <Text
-              style={[
-                styles.toastText,
-                toast.toLowerCase().includes('error') || toast.toLowerCase().includes('fail')
-                  ? styles.toastTextError
-                  : toast.toLowerCase().includes('please') || toast.toLowerCase().includes('कृपया') || toast.toLowerCase().includes('add')
-                    ? styles.toastTextWarning
-                    : styles.toastTextSuccess,
-              ]}
-            >
-              {toast}
-            </Text>
-          </View>
+          ) : !data ? (
+            <View style={styles.loadingContainer}>
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorTitle}>Connection Error</Text>
+                  <Text style={styles.errorDesc}>{error}</Text>
+                  <Button
+                    title="Retry Connection"
+                    onPress={() => refresh()}
+                    style={{ marginTop: 12 }}
+                  />
+                  <Button
+                    title="Back to Home"
+                    variant="secondary"
+                    onPress={() => navigate('home', '/', null, false, null, null)}
+                    style={{ marginTop: 8 }}
+                  />
+                </View>
+              ) : (
+                <AppLoader message="Opening data..." />
+              )}
+            </View>
+          ) : isNewSite ? (
+            <NewSitePage
+              data={data}
+              busy={busy}
+              error={error}
+              onBack={() => navigate('sites', '/sites', null, false)}
+              onSave={handleCreateNewSite}
+            />
+          ) : activeEntryKind === 'MATERIAL' && data ? (
+            <MaterialBillPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              bill={activeEntryParams?.bill}
+              onBack={() => navigate('home', '/', null, false, null, null)}
+              onSave={(vals) =>
+                handleSaveEntry('MATERIAL', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : activeEntryKind === 'WAGE_PAYMENT' && data ? (
+            <WagePaymentPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              workerId={activeEntryParams?.workerId}
+              onBack={() => navigate('home', '/', null, false, null, null)}
+              onSave={(vals) =>
+                handleSaveEntry('WAGE_PAYMENT', vals, activeEntryParams?.siteId, activeEntryParams?.workerId)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : activeEntryKind === 'RECEIPT' && data ? (
+            <ReceivePaymentPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              onBack={() => navigate('home', '/', null, false, null, null)}
+              onSave={(vals) =>
+                handleSaveEntry('RECEIPT', vals, activeEntryParams?.siteId)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : activeEntryKind === 'EXPENSE' && data ? (
+            <ExpenseBillPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              bill={activeEntryParams?.bill}
+              onBack={() => navigate('home', '/', null, false, null, null)}
+              onSave={(vals) =>
+                handleSaveEntry('EXPENSE', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : activeEntryKind === 'EXTRA' && data ? (
+            <ExtraWorkPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              onBack={() => navigate('home', '/', null, false, null, null)}
+              onSave={(vals) =>
+                handleSaveEntry('EXTRA', vals, activeEntryParams?.siteId)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : (
+            <>
+              {tab === 'sites' && (
+                <SitesPage
+                  data={data}
+                  selectedSiteId={selectedSiteId}
+                  onSelectSite={(sId) => navigate('sites', sId ? `/sites/${sId}` : '/sites', sId, false)}
+                  onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
+                  onEditSite={(s) => openForm(siteForm(s))}
+                  onOpenEntry={openEntryModal}
+                  onOpenAttendance={openAttendanceModal}
+                  onShareReport={(sId) => handleShareReport(false, sId)}
+                  onOpenProfile={() => handleNavigate('profile')}
+                  refreshing={refreshing}
+                  onRefresh={() => refresh()}
+                />
+              )}
+
+              {tab === 'attendance' && (
+                <AttendancePage
+                  data={data}
+                  onOpenAttendanceModal={openAttendanceModal}
+                  onOpenProfile={() => handleNavigate('profile')}
+                  refreshing={refreshing}
+                  onRefresh={() => refresh()}
+                />
+              )}
+
+              {tab === 'team' && (
+                <LabourPage
+                  data={data}
+                  selectedWorkerId={selectedWorkerId}
+                  onSelectWorker={(wId) =>
+                    navigate('team', wId ? `/team/${wId}` : '/team', null, false, wId)
+                  }
+                  onOpenWorkerModal={(w) => openForm(workerForm(w))}
+                  onOpenPaymentModal={(wId) =>
+                    openEntryModal('WAGE_PAYMENT', undefined, wId)
+                  }
+                  onOpenProfile={() => handleNavigate('profile')}
+                  refreshing={refreshing}
+                  onRefresh={() => refresh()}
+                />
+              )}
+
+              {tab === 'ledger' && (
+                <HisabPage
+                  data={data}
+                  onOpenEntry={openEntryModal}
+                  onOpenVoidModal={(entry) => openForm(voidForm(entry))}
+                  onOpenProfile={() => handleNavigate('profile')}
+                  refreshing={refreshing}
+                  onRefresh={() => refresh()}
+                />
+              )}
+
+              {tab === 'reports' && (
+                <ReportsPage
+                  data={data}
+                  onGenerateReport={handleShareReport}
+                  onOpenProfile={() => handleNavigate('profile')}
+                  refreshing={refreshing}
+                  onRefresh={() => refresh()}
+                />
+              )}
+
+              {tab === 'profile' && (
+                <ProfilePage
+                  data={data}
+                  onBack={() => navigate('home', '/', null, false)}
+                  onUpdateProfile={handleUpdateProfile}
+                  onLogout={handleLogout}
+                  onRefresh={() => refresh()}
+                  refreshing={refreshing}
+                />
+              )}
+
+              {tab === 'notifications' && (
+                <NotificationsPage
+                  data={data}
+                  onBack={() => navigate('home', '/', null, false)}
+                  onNavigateTab={handleNavigate}
+                  onRefresh={() => refresh()}
+                  refreshing={refreshing}
+                />
+              )}
+
+              {tab === 'settings' && (
+                <SettingsPage
+                  data={data}
+                  onBack={() => navigate('home', '/', null, false)}
+                  onNavigateTab={handleNavigate}
+                  onOpenProfile={() => handleNavigate('profile')}
+                  onLogout={handleLogout}
+                  onRefresh={() => refresh()}
+                  refreshing={refreshing}
+                />
+              )}
+
+              {tab === 'banks' && (
+                <BanksPage
+                  data={data}
+                  onBack={() => navigate('home', '/', null, false)}
+                  onNavigateTab={handleNavigate}
+                  onRefresh={() => refresh()}
+                  refreshing={refreshing}
+                />
+              )}
+            </>
+          )}
         </View>
-      ) : null}
 
-      {/* Main Screen Content */}
-      <View style={styles.content}>
-        {tab === 'home' && !activeEntryKind && !isNewSite ? (
-          <DashboardPage
-            data={data}
-            refreshing={refreshing}
-            onRefresh={() => refresh()}
-            onNavigateTab={handleNavigate}
-            onOpenEntry={(kind, siteId, workerId) => openEntryPage(kind, siteId, workerId)}
-            onSelectSite={(siteId) => navigate('sites', `/sites/${siteId}`, siteId, false)}
-            onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
-            onOpenAttendance={(siteId) => openAttendanceModal(siteId)}
-            onShareReport={() => handleShareReport(true)}
-            onOpenProfile={() => handleNavigate('profile')}
-            onLogout={handleLogout}
-            onShowToast={(msg) => setToast(msg)}
-          />
-        ) : !data ? (
-          <View style={styles.loadingContainer}>
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorTitle}>Connection Error</Text>
-                <Text style={styles.errorDesc}>{error}</Text>
-                <Button
-                  title="Retry Connection"
-                  onPress={() => refresh()}
-                  style={{ marginTop: 12 }}
-                />
-                <Button
-                  title="Back to Home"
-                  variant="secondary"
-                  onPress={() => navigate('home', '/', null, false, null, null)}
-                  style={{ marginTop: 8 }}
-                />
+        {/* Footer Bottom Navigation with Center Golden Action FAB */}
+        <BottomNav
+          tabs={navTabs}
+          activeTab={tab}
+          onTabPress={handleNavigate}
+          onCenterPress={() => setShowFabModal(true)}
+        />
+
+        {/* FAB Quick Action Sheet */}
+        {showFabModal ? (
+          <View style={styles.fabModalBackdrop}>
+            <Pressable style={styles.fabModalDismiss} onPress={() => setShowFabModal(false)} />
+            <View style={styles.fabSheetContent}>
+              <View style={styles.fabSheetHandle} />
+              <Text style={styles.fabSheetTitle}>Record Quick Entry</Text>
+              <Text style={styles.fabSheetSub}>Choose an action to record for your sites</Text>
+
+              <View style={styles.fabGrid}>
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    navigate('sites', '/sites/new', null, true);
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="business" size={24} color="#1D4ED8" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Nayi Site</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    openAttendanceModal();
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#EEF2FF' }]}>
+                    <Ionicons name="calendar" size={24} color="#4338CA" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Daily Haziri</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    openEntryPage('MATERIAL');
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="cube" size={24} color="#D97706" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Material Bill</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    openEntryPage('WAGE_PAYMENT');
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                    <Ionicons name="cash" size={24} color="#059669" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Labour Wage</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    openEntryPage('RECEIPT');
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#ECFDF5' }]}>
+                    <Ionicons name="card" size={24} color="#047857" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Payment In</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.fabActionBtn}
+                  onPress={() => {
+                    setShowFabModal(false);
+                    openEntryPage('EXPENSE');
+                  }}
+                >
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#FFE4E6' }]}>
+                    <Ionicons name="receipt" size={24} color="#E11D48" />
+                  </View>
+                  <Text style={styles.fabActionLabel}>Other Expense</Text>
+                </Pressable>
               </View>
-            ) : (
-              <AppLoader message="Opening data..." />
-            )}
-          </View>
-        ) : isNewSite ? (
-          <NewSitePage
-            data={data}
-            busy={busy}
-            error={error}
-            onBack={() => navigate('sites', '/sites', null, false)}
-            onSave={handleCreateNewSite}
-          />
-        ) : activeEntryKind === 'MATERIAL' && data ? (
-          <MaterialBillPage
-            data={data}
-            busy={busy}
-            error={error}
-            siteId={activeEntryParams?.siteId}
-            bill={activeEntryParams?.bill}
-            onBack={() => navigate('home', '/', null, false, null, null)}
-            onSave={(vals) =>
-              handleSaveEntry('MATERIAL', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
-            }
-            onRefresh={() => refresh()}
-            refreshing={refreshing}
-            onOpenProfile={() => handleNavigate('profile')}
-          />
-        ) : activeEntryKind === 'WAGE_PAYMENT' && data ? (
-          <WagePaymentPage
-            data={data}
-            busy={busy}
-            error={error}
-            siteId={activeEntryParams?.siteId}
-            workerId={activeEntryParams?.workerId}
-            onBack={() => navigate('home', '/', null, false, null, null)}
-            onSave={(vals) =>
-              handleSaveEntry('WAGE_PAYMENT', vals, activeEntryParams?.siteId, activeEntryParams?.workerId)
-            }
-            onRefresh={() => refresh()}
-            refreshing={refreshing}
-            onOpenProfile={() => handleNavigate('profile')}
-          />
-        ) : activeEntryKind === 'RECEIPT' && data ? (
-          <ReceivePaymentPage
-            data={data}
-            busy={busy}
-            error={error}
-            siteId={activeEntryParams?.siteId}
-            onBack={() => navigate('home', '/', null, false, null, null)}
-            onSave={(vals) =>
-              handleSaveEntry('RECEIPT', vals, activeEntryParams?.siteId)
-            }
-            onRefresh={() => refresh()}
-            refreshing={refreshing}
-            onOpenProfile={() => handleNavigate('profile')}
-          />
-        ) : activeEntryKind === 'EXPENSE' && data ? (
-          <ExpenseBillPage
-            data={data}
-            busy={busy}
-            error={error}
-            siteId={activeEntryParams?.siteId}
-            bill={activeEntryParams?.bill}
-            onBack={() => navigate('home', '/', null, false, null, null)}
-            onSave={(vals) =>
-              handleSaveEntry('EXPENSE', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
-            }
-            onRefresh={() => refresh()}
-            refreshing={refreshing}
-            onOpenProfile={() => handleNavigate('profile')}
-          />
-        ) : activeEntryKind === 'EXTRA' && data ? (
-          <ExtraWorkPage
-            data={data}
-            busy={busy}
-            error={error}
-            siteId={activeEntryParams?.siteId}
-            onBack={() => navigate('home', '/', null, false, null, null)}
-            onSave={(vals) =>
-              handleSaveEntry('EXTRA', vals, activeEntryParams?.siteId)
-            }
-            onRefresh={() => refresh()}
-            refreshing={refreshing}
-            onOpenProfile={() => handleNavigate('profile')}
-          />
-        ) : (
-          <>
-            {tab === 'sites' && (
-              <SitesPage
-                data={data}
-                selectedSiteId={selectedSiteId}
-                onSelectSite={(sId) => navigate('sites', sId ? `/sites/${sId}` : '/sites', sId, false)}
-                onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
-                onEditSite={(s) => openForm(siteForm(s))}
-                onOpenEntry={openEntryModal}
-                onOpenAttendance={openAttendanceModal}
-                onShareReport={(sId) => handleShareReport(false, sId)}
-                onOpenProfile={() => handleNavigate('profile')}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-              />
-            )}
-
-            {tab === 'attendance' && (
-              <AttendancePage
-                data={data}
-                onOpenAttendanceModal={openAttendanceModal}
-                onOpenProfile={() => handleNavigate('profile')}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-              />
-            )}
-
-            {tab === 'team' && (
-              <LabourPage
-                data={data}
-                selectedWorkerId={selectedWorkerId}
-                onSelectWorker={(wId) =>
-                  navigate('team', wId ? `/team/${wId}` : '/team', null, false, wId)
-                }
-                onOpenWorkerModal={(w) => openForm(workerForm(w))}
-                onOpenPaymentModal={(wId) =>
-                  openEntryModal('WAGE_PAYMENT', undefined, wId)
-                }
-                onOpenProfile={() => handleNavigate('profile')}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-              />
-            )}
-
-            {tab === 'ledger' && (
-              <HisabPage
-                data={data}
-                onOpenEntry={openEntryModal}
-                onOpenVoidModal={(entry) => openForm(voidForm(entry))}
-                onOpenProfile={() => handleNavigate('profile')}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-              />
-            )}
-
-            {tab === 'reports' && (
-              <ReportsPage
-                data={data}
-                onGenerateReport={handleShareReport}
-                onOpenProfile={() => handleNavigate('profile')}
-                refreshing={refreshing}
-                onRefresh={() => refresh()}
-              />
-            )}
-
-            {tab === 'profile' && (
-              <ProfilePage
-                data={data}
-                onBack={() => navigate('home', '/', null, false)}
-                onUpdateProfile={handleUpdateProfile}
-                onLogout={handleLogout}
-                onRefresh={() => refresh()}
-                refreshing={refreshing}
-              />
-            )}
-          </>
-        )}
-      </View>
-
-      {/* Footer Bottom Navigation with Center Golden Action FAB */}
-      <BottomNav
-        tabs={navTabs}
-        activeTab={tab}
-        onTabPress={handleNavigate}
-        onCenterPress={() => setShowFabModal(true)}
-      />
-
-      {/* FAB Quick Action Sheet */}
-      {showFabModal ? (
-        <View style={styles.fabModalBackdrop}>
-          <Pressable style={styles.fabModalDismiss} onPress={() => setShowFabModal(false)} />
-          <View style={styles.fabSheetContent}>
-            <View style={styles.fabSheetHandle} />
-            <Text style={styles.fabSheetTitle}>Record Quick Entry</Text>
-            <Text style={styles.fabSheetSub}>Choose an action to record for your sites</Text>
-
-            <View style={styles.fabGrid}>
-              <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  navigate('sites', '/sites/new', null, true);
-                }}
-              >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="business" size={24} color="#1D4ED8" />
-                </View>
-                <Text style={styles.fabActionLabel}>Nayi Site</Text>
-              </Pressable>
 
               <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  openAttendanceModal();
-                }}
+                style={styles.fabCloseBtn}
+                onPress={() => setShowFabModal(false)}
               >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#EEF2FF' }]}>
-                  <Ionicons name="calendar" size={24} color="#4338CA" />
-                </View>
-                <Text style={styles.fabActionLabel}>Daily Haziri</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  openEntryPage('MATERIAL');
-                }}
-              >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="cube" size={24} color="#D97706" />
-                </View>
-                <Text style={styles.fabActionLabel}>Material Bill</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  openEntryPage('WAGE_PAYMENT');
-                }}
-              >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#DCFCE7' }]}>
-                  <Ionicons name="cash" size={24} color="#059669" />
-                </View>
-                <Text style={styles.fabActionLabel}>Labour Wage</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  openEntryPage('RECEIPT');
-                }}
-              >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#ECFDF5' }]}>
-                  <Ionicons name="card" size={24} color="#047857" />
-                </View>
-                <Text style={styles.fabActionLabel}>Payment In</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.fabActionBtn}
-                onPress={() => {
-                  setShowFabModal(false);
-                  openEntryPage('EXPENSE');
-                }}
-              >
-                <View style={[styles.fabActionIconBox, { backgroundColor: '#FFE4E6' }]}>
-                  <Ionicons name="receipt" size={24} color="#E11D48" />
-                </View>
-                <Text style={styles.fabActionLabel}>Other Expense</Text>
+                <Text style={styles.fabCloseBtnText}>Cancel</Text>
               </Pressable>
             </View>
-
-            <Pressable
-              style={styles.fabCloseBtn}
-              onPress={() => setShowFabModal(false)}
-            >
-              <Text style={styles.fabCloseBtnText}>Cancel</Text>
-            </Pressable>
           </View>
-        </View>
-      ) : null}
+        ) : null}
 
-      {/* Form Modal */}
-      {form && form.action.startsWith('site.') ? (
-        <SiteFormModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action === 'attendance.save' && data ? (
-        <AttendanceModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form && form.action.startsWith('worker.') && data ? (
-        <WorkerFormModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          data={data}
-          worker={form.entity_id ? data.workers.find((w) => w.id === form.entity_id) : undefined}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-          onOpenPaymentModal={(wId) => {
-            setForm(null);
-            openEntryModal('WAGE_PAYMENT', undefined, wId);
-          }}
-          onOpenAttendanceModal={(wId) => {
-            setForm(null);
-            openAttendanceModal(undefined, wId);
-          }}
-        />
-      ) : form && form.action === 'entry.void' && data ? (
-        <VoidEntryModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          entry={data.entries.find((e) => e.id === form.entity_id)}
-          site={data.sites.find((s) => s.id === data.entries.find((e) => e.id === form.entity_id)?.site_id)}
-          worker={data.workers.find((w) => w.id === data.entries.find((e) => e.id === form.entity_id)?.worker_id)}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : form ? (
-        <FormModal
-          key={form.action + (form.entity_id || '')}
-          spec={form}
-          busy={busy}
-          error={error}
-          onClose={() => {
-            setForm(null);
-            setError('');
-          }}
-          onSave={handleSaveForm}
-        />
-      ) : null}
+        {/* Form Modal */}
+        {form && form.action.startsWith('site.') ? (
+          <SiteFormModal
+            key={form.action + (form.entity_id || '')}
+            spec={form}
+            busy={busy}
+            error={error}
+            onClose={() => {
+              setForm(null);
+              setError('');
+            }}
+            onSave={handleSaveForm}
+          />
+        ) : form && form.action === 'attendance.save' && data ? (
+          <AttendanceModal
+            key={form.action + (form.entity_id || '')}
+            spec={form}
+            data={data}
+            busy={busy}
+            error={error}
+            onClose={() => {
+              setForm(null);
+              setError('');
+            }}
+            onSave={handleSaveForm}
+          />
+        ) : form && form.action.startsWith('worker.') && data ? (
+          <WorkerFormModal
+            key={form.action + (form.entity_id || '')}
+            spec={form}
+            data={data}
+            worker={form.entity_id ? data.workers.find((w) => w.id === form.entity_id) : undefined}
+            busy={busy}
+            error={error}
+            onClose={() => {
+              setForm(null);
+              setError('');
+            }}
+            onSave={handleSaveForm}
+            onOpenPaymentModal={(wId) => {
+              setForm(null);
+              openEntryModal('WAGE_PAYMENT', undefined, wId);
+            }}
+            onOpenAttendanceModal={(wId) => {
+              setForm(null);
+              openAttendanceModal(undefined, wId);
+            }}
+          />
+        ) : form && form.action === 'entry.void' && data ? (
+          <VoidEntryModal
+            key={form.action + (form.entity_id || '')}
+            spec={form}
+            entry={data.entries.find((e) => e.id === form.entity_id)}
+            site={data.sites.find((s) => s.id === data.entries.find((e) => e.id === form.entity_id)?.site_id)}
+            worker={data.workers.find((w) => w.id === data.entries.find((e) => e.id === form.entity_id)?.worker_id)}
+            busy={busy}
+            error={error}
+            onClose={() => {
+              setForm(null);
+              setError('');
+            }}
+            onSave={handleSaveForm}
+          />
+        ) : form ? (
+          <FormModal
+            key={form.action + (form.entity_id || '')}
+            spec={form}
+            busy={busy}
+            error={error}
+            onClose={() => {
+              setForm(null);
+              setError('');
+            }}
+            onSave={handleSaveForm}
+          />
+        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -1115,7 +1111,9 @@ export default function App() {
     <SafeAreaProvider>
       <LanguageProvider>
         <AuthProvider>
-          <MainApp />
+          <ToastProvider>
+            <MainApp />
+          </ToastProvider>
         </AuthProvider>
       </LanguageProvider>
     </SafeAreaProvider>
@@ -1178,53 +1176,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
-  },
-  toastContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    zIndex: 9999,
-  },
-  toast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  toastSuccess: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  toastWarning: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  toastError: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
-  },
-  toastText: {
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  toastTextSuccess: {
-    color: '#065F46',
-  },
-  toastTextWarning: {
-    color: '#92400E',
-  },
-  toastTextError: {
-    color: '#991B1B',
   },
   content: {
     flex: 1,

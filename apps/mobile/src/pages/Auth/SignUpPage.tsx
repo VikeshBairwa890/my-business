@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -37,6 +38,8 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const nameRef = useRef<TextInput>(null);
@@ -46,10 +49,55 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
+  useEffect(() => {
+    // 1. Native Keyboard listeners (iOS / Android)
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardVisible(true);
+        const h = e.endCoordinates?.height;
+        setKeyboardHeight(h && h > 0 ? h : 300);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
+    // 2. Web VisualViewport listener (Mobile Chrome / Safari)
+    let removeVpListener: (() => void) | undefined;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.visualViewport) {
+      const onResize = () => {
+        const winH = window.innerHeight;
+        const vpH = window.visualViewport?.height || winH;
+        const diff = winH - vpH;
+        if (diff > 120) {
+          setKeyboardVisible(true);
+          setKeyboardHeight(diff);
+        } else {
+          setKeyboardVisible(false);
+          setKeyboardHeight(0);
+        }
+      };
+      window.visualViewport.addEventListener('resize', onResize);
+      removeVpListener = () => window.visualViewport?.removeEventListener('resize', onResize);
+    }
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      removeVpListener?.();
+    };
+  }, []);
+
   const handleFocus = (field: string, yOffset = 0) => {
     setFocusedField(field);
     if (yOffset > 0) {
-      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 100);
+      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 80);
+      setTimeout(() => scrollRef.current?.scrollTo({ y: yOffset, animated: true }), 260);
     }
   };
 
@@ -120,8 +168,8 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
   return (
     <SafeAreaView style={styles.root}>
       {/* Background Decorative Aura */}
-      <View style={styles.bgGlowTop} pointerEvents="none" />
-      <View style={styles.bgGlowBottom} pointerEvents="none" />
+      <View style={styles.bgGlowTop} />
+      <View style={styles.bgGlowBottom} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
@@ -130,9 +178,15 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
         <ScrollView
           ref={scrollRef}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.scrollContainer,
             isDesktop && styles.desktopScrollContainer,
+            {
+              paddingBottom: keyboardHeight > 0
+                ? keyboardHeight + 80
+                : (keyboardVisible ? 320 : 60),
+            },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -217,7 +271,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 <Pressable
                   onPress={() => {
                     orgRef.current?.focus();
-                    handleFocus('org', 60);
+                    handleFocus('org', 70);
                   }}
                   style={[
                     styles.inputField,
@@ -240,7 +294,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     autoComplete="off"
                     value={organization}
                     onChangeText={setOrganization}
-                    onFocus={() => handleFocus('org', 60)}
+                    onFocus={() => handleFocus('org', 70)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="next"
                     onSubmitEditing={() => phoneRef.current?.focus()}
@@ -254,7 +308,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 <Pressable
                   onPress={() => {
                     phoneRef.current?.focus();
-                    handleFocus('phone', 100);
+                    handleFocus('phone', 150);
                   }}
                   style={[
                     styles.inputField,
@@ -281,7 +335,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     autoComplete="off"
                     value={phone}
                     onChangeText={setPhone}
-                    onFocus={() => handleFocus('phone', 100)}
+                    onFocus={() => handleFocus('phone', 150)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="next"
                     onSubmitEditing={() => emailRef.current?.focus()}
@@ -295,7 +349,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 <Pressable
                   onPress={() => {
                     emailRef.current?.focus();
-                    handleFocus('email', 140);
+                    handleFocus('email', 230);
                   }}
                   style={[
                     styles.inputField,
@@ -320,7 +374,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     autoCorrect={false}
                     value={email}
                     onChangeText={setEmail}
-                    onFocus={() => handleFocus('email', 140)}
+                    onFocus={() => handleFocus('email', 230)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="next"
                     onSubmitEditing={() => passwordRef.current?.focus()}
@@ -339,7 +393,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 <Pressable
                   onPress={() => {
                     passwordRef.current?.focus();
-                    handleFocus('password', 190);
+                    handleFocus('password', 330);
                   }}
                   style={[
                     styles.inputField,
@@ -364,7 +418,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     autoCorrect={false}
                     value={password}
                     onChangeText={setPassword}
-                    onFocus={() => handleFocus('password', 190)}
+                    onFocus={() => handleFocus('password', 330)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="next"
                     onSubmitEditing={() => confirmPasswordRef.current?.focus()}
@@ -389,7 +443,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                 <Pressable
                   onPress={() => {
                     confirmPasswordRef.current?.focus();
-                    handleFocus('confirmPassword', 230);
+                    handleFocus('confirmPassword', 430);
                   }}
                   style={[
                     styles.inputField,
@@ -423,7 +477,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
                     autoCorrect={false}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
-                    onFocus={() => handleFocus('confirmPassword', 230)}
+                    onFocus={() => handleFocus('confirmPassword', 430)}
                     onBlur={() => setFocusedField(null)}
                     returnKeyType="done"
                     onSubmitEditing={handleSignUp}
@@ -492,6 +546,7 @@ const styles = StyleSheet.create({
     borderRadius: 130,
     backgroundColor: '#DBEAFE',
     opacity: 0.6,
+    pointerEvents: 'none',
   },
   bgGlowBottom: {
     position: 'absolute',
@@ -502,6 +557,7 @@ const styles = StyleSheet.create({
     borderRadius: 140,
     backgroundColor: '#E0E7FF',
     opacity: 0.5,
+    pointerEvents: 'none',
   },
   keyboardView: {
     flex: 1,
