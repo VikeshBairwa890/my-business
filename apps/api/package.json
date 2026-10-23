@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "node --env-file-if-exists=.env src/start.mjs",
+    "start": "node --env-file-if-exists=.env src/start.mjs",
     "migrate": "prisma db push",
     "db:push": "prisma db push",
     "generate": "prisma generate"

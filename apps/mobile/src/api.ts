@@ -6,13 +6,21 @@ import * as Crypto from 'expo-crypto';
 const TOKEN_KEY = 'thekabook_session';
 
 export function getApiBaseUrl(): string {
-  // 1. Explicit env URL takes top priority (Production & Local dev configuration)
+  // 1. Web browser running on localhost: Always connect to local API directly
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname || 'localhost';
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `http://${hostname}:4000`;
+    }
+  }
+
+  // 2. Explicit env URL takes priority (Production & Remote dev configuration)
   const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (envUrl) {
     return envUrl.replace(/\/$/, '');
   }
 
-  // 2. Web browser: Always use window.location.hostname for seamless local/prod web preview
+  // 3. Web browser fallback: Always use window.location.hostname for seamless local/prod web preview
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname || 'localhost';
     return `http://${hostname}:4000`;
@@ -239,6 +247,7 @@ export async function request(path: string, token: string | null, body?: unknown
   const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true',
     ...(token ? { Authorization: 'Bearer ' + token } : {}),
   };
 
