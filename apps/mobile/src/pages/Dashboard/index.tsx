@@ -419,9 +419,9 @@ export function DashboardPage({
 
   return (
     <View style={styles.pageWrapper}>
-      {/* 1. FIXED TOP HEADER (Logo, Greeting, Bell, Search Bar - zIndex 100) */}
+      {/* 1. FIXED TOP HEADER (Logo, Greeting, Bell - zIndex 100) */}
       <View style={styles.fixedHeaderOuter}>
-        <View style={styles.darkHeaderCard}>
+        <View style={styles.headerCard}>
           <View style={styles.topBarRow}>
             {/* Profile Identity Block (Avatar is pressable to open sidebar drawer) */}
             <View style={styles.leftProfileRow}>
@@ -467,27 +467,9 @@ export function DashboardPage({
               ]}
               accessibilityLabel="Notifications"
             >
-              <AppIcon name="notifications-outline" size={20} color="#FFFFFF" />
+              <AppIcon name="notifications-outline" size={20} color="#0F172A" />
               <View style={styles.bellBadgeDot} />
             </Pressable>
-          </View>
-
-          {/* Sleek Search Bar */}
-          <View style={styles.searchBarContainer}>
-            <AppIcon name="search-outline" size={18} color="#94A3B8" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search site, party or worker..."
-              placeholderTextColor="#94A3B8"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-            {searchQuery ? (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                <AppIcon name="close-circle" size={16} color="#94A3B8" />
-              </Pressable>
-            ) : null}
           </View>
         </View>
       </View>
@@ -508,9 +490,6 @@ export function DashboardPage({
           ) : undefined
         }
       >
-        {/* Soft premium blue-gray curved backdrop peeking behind the statement card */}
-        <View style={styles.lightBackdropExtension} pointerEvents="none" />
-
         <View style={styles.bodyContainer}>
           <View style={[styles.whiteCard, styles.monthCard, isDesktop && styles.desktopCard]}>
             <View style={styles.monthCardHeader}>
@@ -864,55 +843,41 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
 
-  /* Soft Premium Blue-Gray Curved Backdrop (stays inside ScrollView behind statement card) */
-  lightBackdropExtension: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 90,
-    backgroundColor: '#EEF4FF', // Soft premium fintech ice-blue
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: '#D8E2F0',
-    maxWidth: 600,
-    width: '100%',
-    alignSelf: 'center',
-    zIndex: 1,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 16px rgba(15, 40, 81, 0.05)' },
-      default: { elevation: 1 },
-    }),
-  },
-
-  /* 1. Dark Top Header (Fixed at top - Logo + Search Bar on zIndex 100) */
+  /* 1. Premium Light Top Header (Fixed at top - Logo, Greeting, Bell on zIndex 100) */
   fixedHeaderOuter: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     zIndex: 100,
     width: '100%',
     alignItems: 'center',
     ...Platform.select({
-      web: { position: 'sticky', top: 0 } as any,
-      default: { elevation: 8 },
+      web: {
+        position: 'sticky',
+        top: 0,
+        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
+      } as any,
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 3,
+      },
     }),
   },
-  darkHeaderCard: {
-    backgroundColor: '#162032',
+  headerCard: {
+    backgroundColor: '#FFFFFF',
     maxWidth: 600,
     width: '100%',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
   },
   topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
   },
   leftProfileRow: {
     flexDirection: 'row',
@@ -924,28 +889,32 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
     position: 'relative',
     overflow: 'visible',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    borderColor: '#FEF3C7',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)' },
+      default: { elevation: 2 },
+    }),
   },
   avatarPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.94 }],
   },
   avatarImage: {
-    width: 41,
-    height: 41,
-    borderRadius: 20.5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   avatarInitialsBox: {
-    width: 41,
-    height: 41,
-    borderRadius: 20.5,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
@@ -953,7 +922,7 @@ const styles = StyleSheet.create({
   avatarInitialsText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   onlineBadgeDot: {
@@ -965,7 +934,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: '#162032',
+    borderColor: '#FFFFFF',
   },
   nameRow: {
     flexDirection: 'row',
@@ -976,7 +945,7 @@ const styles = StyleSheet.create({
   },
   greetingTitle: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     fontWeight: '600',
     lineHeight: 16,
     marginBottom: 2,
@@ -984,59 +953,40 @@ const styles = StyleSheet.create({
   contractorNameText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0F172A',
     letterSpacing: -0.3,
   },
   bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#E2E8F0',
     position: 'relative',
+    ...Platform.select({
+      web: { boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)' },
+      default: { elevation: 1 },
+    }),
   },
   bellBadgeDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#F59E0B', // Amber dot
+    backgroundColor: '#F59E0B',
     position: 'absolute',
-    top: 9,
-    right: 10,
+    top: 10,
+    right: 11,
     borderWidth: 1.5,
-    borderColor: '#162032',
+    borderColor: '#FFFFFF',
   },
 
-  /* Sleek Search Bar */
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#FFFFFF',
-    marginLeft: 8,
-    paddingVertical: 0,
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as any,
-      default: {},
-    }),
-  },
-
-  /* 2. Body Container (Sits ON TOP of dark backdrop extension and slides under fixed search bar) */
+  /* 2. Body Container (Sits cleanly below fixed header on light background) */
   bodyContainer: {
     paddingHorizontal: 16,
-    marginTop: 8,
+    marginTop: 14,
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
