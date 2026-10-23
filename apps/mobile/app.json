@@ -29,8 +29,9 @@
     "extra": {
       "description": "Sites, people and every rupee. Contractor work ledger.",
       "eas": {
-        "projectId": "e270cfc6-36fa-420c-9a3a-14788827d3bf"
+        "projectId": "8ebc7230-c728-46e1-b81f-9c8361224f9a"
       }
-    }
+    },
+    "owner": "subhash7750s-team"
   }
 }
