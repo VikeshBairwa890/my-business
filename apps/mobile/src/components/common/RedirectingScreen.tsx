@@ -82,8 +82,8 @@ export function RedirectingScreen({
   return (
     <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
       {/* Background Ambient Aura */}
-      <View style={styles.glowTop} pointerEvents="none" />
-      <View style={styles.glowBottom} pointerEvents="none" />
+      <View style={styles.glowTop} />
+      <View style={styles.glowBottom} />
 
       <View style={styles.contentContainer}>
         {/* Animated Emblem Box */}
@@ -166,6 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: 130,
     backgroundColor: '#DBEAFE',
     opacity: 0.6,
+    pointerEvents: 'none',
   },
   glowBottom: {
     position: 'absolute',
@@ -176,6 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: 130,
     backgroundColor: '#E0E7FF',
     opacity: 0.5,
+    pointerEvents: 'none',
   },
   contentContainer: {
     alignItems: 'center',

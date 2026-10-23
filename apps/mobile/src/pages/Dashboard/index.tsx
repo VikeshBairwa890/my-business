@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,15 @@ import {
   Linking,
   useWindowDimensions,
   RefreshControl,
+  Image,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
 import { useAuth } from '../../context/AuthContext';
 import { Snapshot, Row } from '../../types';
 import { money, siteSummary } from '../../finance';
+import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 
 export interface DashboardPageProps {
   data?: Snapshot | null;
@@ -28,8 +31,9 @@ export interface DashboardPageProps {
   onOpenAttendance?: (siteId?: string) => void;
   onShareReport?: () => void;
   onOpenProfile?: () => void;
+  onOpenNotifications?: () => void;
   onLogout?: () => void;
-  onShowToast?: (msg: string) => void;
+  onShowToast?: (msg: string, type?: string) => void;
 }
 
 export function DashboardPage({
@@ -43,6 +47,7 @@ export function DashboardPage({
   onOpenAttendance,
   onShareReport,
   onOpenProfile,
+  onOpenNotifications,
   onLogout,
   onShowToast,
 }: DashboardPageProps) {
@@ -51,6 +56,12 @@ export function DashboardPage({
   const isDesktop = width > 768;
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const firmName =
+    data?.user?.firmName ||
+    (user as any)?.firmName ||
+    'Sharma Construction & Infra';
 
   // Extract name for display (e.g. "Ramesh ji" or user's first name + "ji")
   const rawName = user?.name || data?.user?.name || 'Contractor';
@@ -58,6 +69,80 @@ export function DashboardPage({
   const contractorDisplayName = firstName.toLowerCase().endsWith('ji')
     ? firstName
     : `${firstName} ji`;
+
+  // Dynamic Greeting based on time of day (Good Morning / Good Afternoon / Good Evening)
+  const greetingText = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning ☀️';
+    if (hour < 17) return 'Good Afternoon 🌤️';
+    return 'Good Evening 🌙';
+  }, []);
+
+  // Contractor Initials fallback
+  const initials = useMemo(() => {
+    const parts = rawName.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return (rawName.slice(0, 2) || 'CB').toUpperCase();
+  }, [rawName]);
+
+  // Load any locally saved profile image if not in user object
+  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadAvatar() {
+      try {
+        let stored: string | null = null;
+        if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+          stored =
+            localStorage.getItem('thekabook_contractor_avatar') ||
+            localStorage.getItem('contractor_avatar') ||
+            localStorage.getItem('thekabook_user_avatar');
+
+          if (!stored) {
+            const prof =
+              localStorage.getItem('thekabook_contractor_profile_v3') ||
+              localStorage.getItem('thekabook_contractor_profile_v2');
+            if (prof) {
+              const p = JSON.parse(prof);
+              stored = p.avatar || p.photo || p.image || null;
+            }
+          }
+        } else {
+          stored = await SecureStore.getItemAsync('thekabook_contractor_avatar');
+          if (!stored) {
+            const prof = await SecureStore.getItemAsync('thekabook_contractor_profile_v3');
+            if (prof) {
+              const p = JSON.parse(prof);
+              stored = p.avatar || p.photo || p.image || null;
+            }
+          }
+        }
+        if (stored) setLocalAvatar(stored);
+      } catch { }
+    }
+    loadAvatar();
+  }, [user]);
+
+  // Resolved base64 / uri
+  const avatarUri = useMemo(() => {
+    const raw =
+      user?.avatar ||
+      user?.photo ||
+      user?.image ||
+      data?.user?.avatar ||
+      data?.user?.photo ||
+      localAvatar;
+
+    if (!raw) return null;
+    const str = String(raw).trim();
+    if (!str) return null;
+    if (str.startsWith('data:') || str.startsWith('http://') || str.startsWith('https://')) {
+      return str;
+    }
+    return `data:image/jpeg;base64,${str}`;
+  }, [user, data, localAvatar]);
 
   // Current month string e.g. "Oct 2026"
   const currentMonthStr = useMemo(() => {
@@ -160,7 +245,7 @@ export function DashboardPage({
         workers_count: 4,
         pending_balance: 4500000,  // ₹45,000
         progress: 70,
-        status: 'Chal raha hai',
+        status: 'In Progress',
       },
       {
         id: 'sample-2',
@@ -172,7 +257,7 @@ export function DashboardPage({
         workers_count: 6,
         pending_balance: 8800000,  // ₹88,000
         progress: 60,
-        status: 'Chal raha hai',
+        status: 'In Progress',
       },
       {
         id: 'sample-3',
@@ -184,7 +269,7 @@ export function DashboardPage({
         workers_count: 8,
         pending_balance: 5700000,  // ₹57,000
         progress: 85,
-        status: 'Chal raha hai',
+        status: 'In Progress',
       },
     ];
   }, [data?.sites, searchQuery]);
@@ -196,8 +281,8 @@ export function DashboardPage({
         const sum = siteSummary(s, data.attendance || [], data.entries || []);
         if (sum.ownerBalance > 0) {
           return {
-            title: `${s.owner_name || s.name} se ${money(sum.ownerBalance)} lena hai`,
-            sub: 'Payment overdue • 3 din se baaki hai',
+            title: `${money(sum.ownerBalance)} pending from ${s.owner_name || s.name}`,
+            sub: 'Payment overdue • Pending for 3 days',
             rawAmount: money(sum.ownerBalance),
             partyName: s.owner_name || s.name,
           };
@@ -205,8 +290,8 @@ export function DashboardPage({
       }
     }
     return {
-      title: 'Verma ji se ₹30,000 lena hai',
-      sub: '3 din se baaki hai',
+      title: '₹30,000 pending from Verma ji',
+      sub: 'Overdue by 3 days',
       rawAmount: '₹30,000',
       partyName: 'Verma ji',
     };
@@ -214,26 +299,26 @@ export function DashboardPage({
 
   // WhatsApp Reminder Handler
   const handleSendReminder = () => {
-    const text = `Namaste ${reminderInfo.partyName}, ThekaBook se payment reminder: Aapka ${reminderInfo.rawAmount} ka payment baaki hai. Kripya shighra jama karein. Dhanyawad!`;
+    const text = `Hello ${reminderInfo.partyName}, payment reminder from ThekaBook: Your payment of ${reminderInfo.rawAmount} is pending. Please settle at your earliest convenience. Thank you!`;
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     if (Platform.OS === 'web') {
       window.open(url, '_blank');
     } else {
       Linking.openURL(url).catch(() => {
-        onShowToast?.('Payment reminder text copied!');
+        onShowToast?.('Payment reminder text copied!', 's');
       });
     }
   };
 
   // WhatsApp Refer & Earn Handler
   const handleShareReferral = () => {
-    const msg = `Bhai, ThekaBook app use kar — Apni sites ka hisaab, mazdoor haziri, aur material bill manage karne ke liye best app hai! Download link: https://thekabook.com/invite?ref=${user?.phone || 'contractor'}`;
+    const msg = `Manage your work sites, labour attendance, and material bills effortlessly with ThekaBook! Download here: https://thekabook.com/invite?ref=${user?.phone || 'contractor'}`;
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     if (Platform.OS === 'web') {
       window.open(url, '_blank');
     } else {
       Linking.openURL(url).catch(() => {
-        onShowToast?.('Referral link copied to clipboard!');
+        onShowToast?.('Referral link copied to clipboard!', 's');
       });
     }
   };
@@ -334,8 +419,8 @@ export function DashboardPage({
 
   return (
     <View style={styles.pageWrapper}>
-      {/* 0. FIXED DARK BACKDROP EXTENSION (Fixed at top, zIndex 1) */}
-      <View style={styles.fixedDarkBackdropWrapper} pointerEvents="none">
+      {/* 0. FIXED DARK BACKDROP EXTENSION (Fixed at top, zIndex 1, wraps around statement card) */}
+      <View style={styles.fixedDarkBackdropWrapper}>
         <View style={styles.fixedDarkBackdrop} />
       </View>
 
@@ -343,24 +428,44 @@ export function DashboardPage({
       <View style={styles.fixedHeaderOuter}>
         <View style={styles.darkHeaderCard}>
           <View style={styles.topBarRow}>
+            {/* Profile Identity Block (Avatar is pressable to open sidebar drawer) */}
             <View style={styles.leftProfileRow}>
-              {/* Yellow Book App Logo Box */}
-              <View style={styles.appLogoBox}>
-                <AppIcon name="book" size={24} color="#1E293B" />
-              </View>
+              {/* Profile Avatar (Base64 Image / Initials) - Tapping opens Sidebar */}
+              <Pressable
+                onPress={() => setSidebarOpen(true)}
+                style={({ pressed }) => [
+                  styles.appLogoBox,
+                  pressed && styles.avatarPressed,
+                ]}
+                accessibilityLabel="Open Sidebar Menu"
+              >
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarInitialsBox}>
+                    <Text style={styles.avatarInitialsText}>{initials}</Text>
+                  </View>
+                )}
+                {/* Active Online Indicator */}
+                <View style={styles.onlineBadgeDot} />
+              </Pressable>
 
-              {/* Greeting & Name */}
+              {/* Greeting Title & Contractor Name (Non-clickable pure info) */}
               <View style={styles.greetingTextWrap}>
-                <Text style={styles.namasteLabel}>Namaste</Text>
-                <Text style={styles.contractorNameText} numberOfLines={1}>
-                  {contractorDisplayName}
+                <Text style={styles.greetingTitle} numberOfLines={1}>
+                  {greetingText}
                 </Text>
+                <View style={styles.nameRow}>
+                  <Text style={styles.contractorNameText} numberOfLines={1}>
+                    {contractorDisplayName}
+                  </Text>
+                </View>
               </View>
             </View>
 
             {/* Notification Bell Button */}
             <Pressable
-              onPress={() => onOpenProfile?.() || onNavigateTab('profile')}
+              onPress={() => (onOpenNotifications ? onOpenNotifications() : onNavigateTab('notifications'))}
               style={({ pressed }) => [
                 styles.bellBtn,
                 pressed && styles.itemPressed,
@@ -372,12 +477,12 @@ export function DashboardPage({
             </Pressable>
           </View>
 
-          {/* Sleek Search Bar: "Site, party ya mazdoor dhundo" */}
+          {/* Sleek Search Bar */}
           <View style={styles.searchBarContainer}>
             <AppIcon name="search-outline" size={18} color="#94A3B8" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Site, party ya mazdoor dhundo"
+              placeholder="Search site, party or worker..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -392,7 +497,7 @@ export function DashboardPage({
         </View>
       </View>
 
-      {/* 2. SCROLLABLE CONTENT (Scrolls underneath the fixed search bar) */}
+      {/* 2. SCROLLABLE CONTENT */}
       <ScrollView
         style={styles.root}
         contentContainerStyle={styles.scroll}
@@ -559,13 +664,13 @@ export function DashboardPage({
                     isDesktop && styles.desktopCard,
                   ]}
                 >
-                  {/* Top: Name — Work Type + Chal raha hai Badge */}
+                  {/* Top: Name — Work Type + Status Badge */}
                   <View style={styles.siteTopRow}>
                     <Text style={styles.siteTitleName} numberOfLines={1}>
                       {site.name} — <Text style={styles.siteWorkType}>{workType}</Text>
                     </Text>
                     <View style={styles.chalRahaHaiBadge}>
-                      <Text style={styles.chalRahaHaiText}>Chal raha hai</Text>
+                      <Text style={styles.chalRahaHaiText}>In Progress</Text>
                     </View>
                   </View>
 
@@ -584,13 +689,13 @@ export function DashboardPage({
                     />
                   </View>
 
-                  {/* Bottom: Progress % • Mazdoor + Baaki Amount */}
+                  {/* Bottom: Progress % • Workers + Pending Amount */}
                   <View style={styles.siteBottomRow}>
                     <Text style={styles.siteProgressMeta}>
-                      {progressPercent}% kaam hua • {workersCount} mazdoor
+                      {progressPercent}% completed • {workersCount} workers
                     </Text>
                     <Text style={styles.sitePendingAmount}>
-                      {money(pendingBalance)} baaki
+                      {money(pendingBalance)} pending
                     </Text>
                   </View>
                 </Pressable>
@@ -669,7 +774,7 @@ export function DashboardPage({
               <View style={styles.howItWorksHeader}>
                 <Text style={styles.howItWorksTitle}>How it works?</Text>
                 <Pressable
-                  onPress={() => onShowToast?.('Each referral gets ₹120 when they create their first work site.')}
+                  onPress={() => onShowToast?.('Each referral gets ₹120 when they create their first work site.', 'i')}
                   hitSlop={8}
                 >
                   <Text style={styles.termsLinkText}>Terms & Conditions</Text>
@@ -726,6 +831,20 @@ export function DashboardPage({
           </View>
         </View>
       </ScrollView>
+
+      {/* Custom Fintech Sidebar Drawer */}
+      <SidebarDrawer
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        user={user}
+        firmName={firmName}
+        avatarUri={avatarUri}
+        initials={initials}
+        onNavigateTab={onNavigateTab}
+        onOpenProfile={onOpenProfile}
+        onLogout={onLogout}
+        onShareReport={onShareReport}
+      />
     </View>
   );
 }
@@ -740,13 +859,14 @@ const styles = StyleSheet.create({
     zIndex: 10,
     ...Platform.select({
       web: { position: 'relative' } as any,
+      default: { elevation: 2 },
     }),
   },
   scroll: {
     paddingBottom: 40,
   },
 
-  /* 0. Fixed Dark Backdrop Extension (stays fixed behind top card with rounded corners) */
+  /* 0. Fixed Dark Backdrop Extension (stays behind top card with rounded corners, wrapping around it) */
   fixedDarkBackdropWrapper: {
     position: 'absolute',
     top: 0,
@@ -754,9 +874,10 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: 1,
+    pointerEvents: 'none',
   },
   fixedDarkBackdrop: {
-    height: 196,
+    height: 210,
     maxWidth: 600,
     width: '100%',
     backgroundColor: '#162032',
@@ -764,7 +885,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 28,
     ...Platform.select({
       web: { boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)' },
-      default: { elevation: 2 },
+      default: { elevation: 0 },
     }),
   },
 
@@ -776,6 +897,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Platform.select({
       web: { position: 'sticky', top: 0 } as any,
+      default: { elevation: 8 },
     }),
   },
   darkHeaderCard: {
@@ -801,31 +923,69 @@ const styles = StyleSheet.create({
   appLogoBox: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#F59E0B', // Golden amber book logo box
+    borderRadius: 22,
+    backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)' },
-      default: { elevation: 3 },
-    }),
+    position: 'relative',
+    overflow: 'visible',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.94 }],
+  },
+  avatarImage: {
+    width: 41,
+    height: 41,
+    borderRadius: 20.5,
+  },
+  avatarInitialsBox: {
+    width: 41,
+    height: 41,
+    borderRadius: 20.5,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: 0.5,
+  },
+  onlineBadgeDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#162032',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   greetingTextWrap: {
     flex: 1,
   },
-  namasteLabel: {
-    fontSize: 13,
+  greetingTitle: {
+    fontSize: 12,
     color: '#94A3B8',
-    fontWeight: '500',
+    fontWeight: '600',
     lineHeight: 16,
+    marginBottom: 2,
   },
   contractorNameText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.3,
-    marginTop: 1,
   },
   bellBtn: {
     width: 40,
@@ -883,6 +1043,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
     ...Platform.select({
       web: { position: 'relative' } as any,
+      default: { elevation: 2 },
     }),
   },
   desktopCard: {

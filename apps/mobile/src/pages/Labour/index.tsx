@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   BackHandler,
   Image,
+  Platform,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -110,6 +111,7 @@ export function LabourPage({
 
   // Handle Android back button when viewing worker detail
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (!selectedWorker) return;
     const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
       handleSelectWorker(null);
