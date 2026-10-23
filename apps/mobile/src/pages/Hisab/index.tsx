@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scroll: {
-    paddingBottom: 110,
+    paddingBottom: 40,
   },
   container: {
     maxWidth: 760,

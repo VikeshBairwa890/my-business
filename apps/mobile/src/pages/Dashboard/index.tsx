@@ -508,8 +508,8 @@ export function DashboardPage({
           ) : undefined
         }
       >
-        {/* Dark curved backdrop extension that peeks behind the top card with rounded corners, exactly matching PC layout */}
-        <View style={styles.darkBackdropExtension} pointerEvents="none" />
+        {/* Soft premium blue-gray curved backdrop peeking behind the statement card */}
+        <View style={styles.lightBackdropExtension} pointerEvents="none" />
 
         <View style={styles.bodyContainer}>
           <View style={[styles.whiteCard, styles.monthCard, isDesktop && styles.desktopCard]}>
@@ -864,22 +864,25 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
 
-  /* Dark Curved Backdrop Extension (placed inside ScrollView so it stays behind bodyContainer and scrolls naturally) */
-  darkBackdropExtension: {
+  /* Soft Premium Blue-Gray Curved Backdrop (stays inside ScrollView behind statement card) */
+  lightBackdropExtension: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 85,
-    backgroundColor: '#162032',
+    height: 90,
+    backgroundColor: '#EEF4FF', // Soft premium fintech ice-blue
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#D8E2F0',
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
     zIndex: 1,
     ...Platform.select({
-      web: { boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)' },
+      web: { boxShadow: '0 4px 16px rgba(15, 40, 81, 0.05)' },
       default: { elevation: 1 },
     }),
   },
@@ -902,6 +905,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 44 : 20,
     paddingHorizontal: 16,
     paddingBottom: 14,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   topBarRow: {
     flexDirection: 'row',
