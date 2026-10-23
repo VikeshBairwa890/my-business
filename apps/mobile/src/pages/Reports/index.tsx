@@ -21,6 +21,7 @@ interface ReportsPageProps {
   data: Snapshot;
   onGenerateReport: (pdf: boolean, siteId?: string) => void;
   onOpenProfile?: () => void;
+  onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -31,6 +32,7 @@ export function ReportsPage({
   data,
   onGenerateReport,
   onOpenProfile,
+  onBack,
   refreshing,
   onRefresh,
 }: ReportsPageProps) {
@@ -158,6 +160,7 @@ export function ReportsPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

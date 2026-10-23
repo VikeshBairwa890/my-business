@@ -25,6 +25,7 @@ interface HisabPageProps {
   onOpenEntry: (kind: string, siteId?: string, workerId?: string, bill?: Row) => void;
   onOpenVoidModal: (entry: Row) => void;
   onOpenProfile?: () => void;
+  onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -34,6 +35,7 @@ export function HisabPage({
   onOpenEntry,
   onOpenVoidModal,
   onOpenProfile,
+  onBack,
   refreshing,
   onRefresh,
 }: HisabPageProps) {
@@ -151,6 +153,7 @@ export function HisabPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

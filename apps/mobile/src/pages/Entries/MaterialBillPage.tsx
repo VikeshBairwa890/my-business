@@ -54,6 +54,7 @@ export function MaterialBillPage({
   data,
   busy,
   error,
+  onBack,
   onSave,
   onRefresh,
   refreshing = false,
@@ -262,6 +263,7 @@ export function MaterialBillPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

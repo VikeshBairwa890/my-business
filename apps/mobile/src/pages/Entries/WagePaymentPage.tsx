@@ -46,6 +46,7 @@ export function WagePaymentPage({
   data,
   busy,
   error,
+  onBack,
   onSave,
   onRefresh,
   refreshing = false,
@@ -198,6 +199,7 @@ export function WagePaymentPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

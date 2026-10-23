@@ -61,6 +61,7 @@ export function ExtraWorkPage({
   data,
   busy,
   error,
+  onBack,
   onSave,
   onRefresh,
   refreshing = false,
@@ -277,6 +278,7 @@ export function ExtraWorkPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

@@ -30,6 +30,7 @@ interface AttendancePageProps {
   data: Snapshot;
   onOpenAttendanceModal: (siteId?: string, workerId?: string, existing?: Row) => void;
   onOpenProfile?: () => void;
+  onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -68,6 +69,7 @@ export function AttendancePage({
   data,
   onOpenAttendanceModal,
   onOpenProfile,
+  onBack,
   refreshing,
   onRefresh,
 }: AttendancePageProps) {
@@ -464,6 +466,7 @@ export function AttendancePage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

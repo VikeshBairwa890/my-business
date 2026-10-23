@@ -827,6 +827,7 @@ function MainApp() {
               {tab === 'attendance' && (
                 <AttendancePage
                   data={data}
+                  onBack={() => navigate('home', '/', null, false, null, null)}
                   onOpenAttendanceModal={openAttendanceModal}
                   onOpenProfile={() => handleNavigate('profile')}
                   refreshing={refreshing}

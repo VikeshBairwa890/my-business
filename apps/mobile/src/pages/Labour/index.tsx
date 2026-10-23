@@ -33,6 +33,7 @@ export interface LabourPageProps {
   onOpenWorkerModal: (worker?: Row) => void;
   onOpenPaymentModal: (workerId: string) => void;
   onOpenProfile?: () => void;
+  onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -85,6 +86,7 @@ export function LabourPage({
   onOpenWorkerModal,
   onOpenPaymentModal,
   onOpenProfile,
+  onBack,
   refreshing,
   onRefresh,
 }: LabourPageProps) {
@@ -229,6 +231,7 @@ export function LabourPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
         actions={
           <Pressable
             onPress={() => onOpenWorkerModal()}

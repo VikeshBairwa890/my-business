@@ -45,6 +45,7 @@ export function ReceivePaymentPage({
   data,
   busy,
   error,
+  onBack,
   onSave,
   onRefresh,
   refreshing = false,
@@ -177,6 +178,7 @@ export function ReceivePaymentPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
       />
 
       <ScrollView

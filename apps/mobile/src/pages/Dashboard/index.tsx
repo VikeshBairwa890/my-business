@@ -58,17 +58,64 @@ export function DashboardPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const firmName =
-    data?.user?.firmName ||
-    (user as any)?.firmName ||
-    'Sharma Construction & Infra';
+  const [localFirmName, setLocalFirmName] = useState<string>('');
+  const [localContractorName, setLocalContractorName] = useState<string>('');
+  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
 
-  // Extract name for display (e.g. "Ramesh ji" or user's first name + "ji")
-  const rawName = user?.name || data?.user?.name || 'Contractor';
-  const firstName = rawName.split(' ')[0] || rawName;
-  const contractorDisplayName = firstName.toLowerCase().endsWith('ji')
-    ? firstName
-    : `${firstName} ji`;
+  useEffect(() => {
+    async function loadSavedProfileInfo() {
+      try {
+        let storedAvatar: string | null = null;
+        let profStr: string | null = null;
+
+        if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+          storedAvatar =
+            localStorage.getItem('thekabook_contractor_avatar') ||
+            localStorage.getItem('contractor_avatar') ||
+            localStorage.getItem('thekabook_user_avatar');
+
+          profStr =
+            localStorage.getItem('thekabook_contractor_profile_v3') ||
+            localStorage.getItem('thekabook_contractor_profile_v2');
+        } else {
+          storedAvatar = await SecureStore.getItemAsync('thekabook_contractor_avatar');
+          profStr =
+            (await SecureStore.getItemAsync('thekabook_contractor_profile_v3')) ||
+            (await SecureStore.getItemAsync('thekabook_contractor_profile_v2'));
+        }
+
+        if (profStr) {
+          try {
+            const p = JSON.parse(profStr);
+            if (p.firmName) setLocalFirmName(p.firmName);
+            if (p.contractorName) setLocalContractorName(p.contractorName);
+            if (!storedAvatar && (p.avatar || p.photo || p.image)) {
+              storedAvatar = p.avatar || p.photo || p.image;
+            }
+          } catch { }
+        }
+
+        if (storedAvatar) setLocalAvatar(storedAvatar);
+      } catch { }
+    }
+    loadSavedProfileInfo();
+  }, [user, data]);
+
+  const firmName =
+    data?.organization?.name ||
+    localFirmName ||
+    (user as any)?.organization_name ||
+    (user as any)?.firmName ||
+    data?.user?.firmName ||
+    'ThekaBook Business';
+
+  const rawName =
+    localContractorName ||
+    data?.user?.name ||
+    user?.name ||
+    'Contractor';
+
+  const contractorDisplayName = rawName;
 
   // Dynamic Greeting based on time of day (Good Morning / Good Afternoon / Good Evening)
   const greetingText = useMemo(() => {
@@ -86,44 +133,6 @@ export function DashboardPage({
     }
     return (rawName.slice(0, 2) || 'CB').toUpperCase();
   }, [rawName]);
-
-  // Load any locally saved profile image if not in user object
-  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadAvatar() {
-      try {
-        let stored: string | null = null;
-        if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-          stored =
-            localStorage.getItem('thekabook_contractor_avatar') ||
-            localStorage.getItem('contractor_avatar') ||
-            localStorage.getItem('thekabook_user_avatar');
-
-          if (!stored) {
-            const prof =
-              localStorage.getItem('thekabook_contractor_profile_v3') ||
-              localStorage.getItem('thekabook_contractor_profile_v2');
-            if (prof) {
-              const p = JSON.parse(prof);
-              stored = p.avatar || p.photo || p.image || null;
-            }
-          }
-        } else {
-          stored = await SecureStore.getItemAsync('thekabook_contractor_avatar');
-          if (!stored) {
-            const prof = await SecureStore.getItemAsync('thekabook_contractor_profile_v3');
-            if (prof) {
-              const p = JSON.parse(prof);
-              stored = p.avatar || p.photo || p.image || null;
-            }
-          }
-        }
-        if (stored) setLocalAvatar(stored);
-      } catch { }
-    }
-    loadAvatar();
-  }, [user]);
 
   // Resolved base64 / uri
   const avatarUri = useMemo(() => {
@@ -746,8 +755,8 @@ export function DashboardPage({
               <View style={[styles.sparkleDot, { bottom: 12, right: 38 }]} />
             </View>
 
-            {/* Bottom Nested White Card: "How it works?" */}
-            <View style={styles.howItWorksCard}>
+            {/* How it works details directly inside single Refer & Earn card */}
+            <View style={styles.howItWorksSection}>
               <View style={styles.howItWorksHeader}>
                 <Text style={styles.howItWorksTitle}>How it works?</Text>
                 <Pressable
@@ -815,6 +824,7 @@ export function DashboardPage({
         onClose={() => setSidebarOpen(false)}
         user={user}
         firmName={firmName}
+        contractorName={contractorDisplayName}
         avatarUri={avatarUri}
         initials={initials}
         onNavigateTab={onNavigateTab}
@@ -1508,32 +1518,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#818CF8',
   },
 
-  /* Nested White Card: "How it works?" */
-  howItWorksCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 6,
-    ...Platform.select({
-      web: { boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)' },
-      default: { elevation: 2 },
-    }),
+  /* Details directly inside single Refer & Earn card (No inner card) */
+  howItWorksSection: {
+    width: '100%',
+    marginTop: 10,
+    paddingTop: 8,
   },
   howItWorksHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
+    paddingHorizontal: 4,
   },
   howItWorksTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#3B1E78', // Deep purple matching heading
   },
   termsLinkText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#6366F1', // Indigo link text
   },
@@ -1549,29 +1553,33 @@ const styles = StyleSheet.create({
     width: 82,
   },
   stepIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F3FF',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF', // Clean white icon circles on lavender card
     borderWidth: 1.5,
     borderColor: '#DDD6FE',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(124, 58, 237, 0.12)' },
+      default: { elevation: 1 },
+    }),
   },
   stepLabelText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#334155',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 14,
   },
   stepDashedLine: {
     flex: 1,
     height: 1,
     borderBottomWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#CBD5E1',
+    borderColor: '#C4B5FD', // Soft lavender dash
     marginTop: -18,
     marginHorizontal: 2,
   },
@@ -1579,18 +1587,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#25D366', // WhatsApp green
-    paddingVertical: 11,
+    backgroundColor: '#22C55E', // WhatsApp emerald green
+    paddingVertical: 13,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     ...Platform.select({
-      web: { boxShadow: '0 4px 12px rgba(37, 211, 102, 0.3)' },
+      web: { boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)' },
       default: { elevation: 2 },
     }),
   },
   referWhatsappBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
     marginLeft: 8,
   },

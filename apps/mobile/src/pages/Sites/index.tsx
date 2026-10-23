@@ -35,6 +35,7 @@ interface SitesPageProps {
   onOpenAttendance: (siteId?: string) => void;
   onShareReport: (siteId: string) => void;
   onOpenProfile?: () => void;
+  onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
 }
@@ -83,6 +84,7 @@ export function SitesPage({
   onOpenAttendance,
   onShareReport,
   onOpenProfile,
+  onBack,
   refreshing,
   onRefresh,
 }: SitesPageProps) {
@@ -166,6 +168,7 @@ export function SitesPage({
           onOpenProfile={onOpenProfile}
           onRefresh={onRefresh}
           refreshing={refreshing}
+          onBack={() => onSelectSite(null)}
         />
         <ScrollView
           style={styles.root}
@@ -764,6 +767,7 @@ export function SitesPage({
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
+        onBack={onBack}
         actions={
           <Pressable
             onPress={onOpenNewSite}

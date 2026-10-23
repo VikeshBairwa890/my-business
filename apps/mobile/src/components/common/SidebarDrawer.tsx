@@ -22,6 +22,7 @@ export interface SidebarDrawerProps {
   onClose: () => void;
   user: UserInfo | null;
   firmName?: string;
+  contractorName?: string;
   avatarUri?: string | null;
   initials?: string;
   onNavigateTab: (tabKey: string) => void;
@@ -35,6 +36,7 @@ export function SidebarDrawer({
   onClose,
   user,
   firmName = 'ThekaBook Business',
+  contractorName,
   avatarUri,
   initials = 'CB',
   onNavigateTab,
@@ -80,9 +82,8 @@ export function SidebarDrawer({
 
   if (!isOpen) return null;
 
-  const rawName = user?.name || 'Contractor';
-  const firstName = rawName.split(' ')[0] || rawName;
-  const displayName = firstName.toLowerCase().endsWith('ji') ? firstName : `${firstName} ji`;
+  const rawName = contractorName || user?.name || 'Contractor';
+  const displayName = rawName;
 
   const handleItemPress = (action: () => void) => {
     onClose();
@@ -145,7 +146,7 @@ export function SidebarDrawer({
           <View style={styles.profileHeaderCard}>
             {/* Close Button at top-right */}
             <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={20} color="#94A3B8" />
+              <Ionicons name="close" size={20} color="#0F172A" />
             </Pressable>
 
             <View style={styles.avatarRow}>
@@ -170,27 +171,12 @@ export function SidebarDrawer({
                 </Text>
                 {user?.phone ? (
                   <Text style={styles.phoneText}>+91 {user.phone}</Text>
-                ) : (
-                  <View style={styles.verifiedBadge}>
-                    <Ionicons name="shield-checkmark" size={12} color="#10B981" />
-                    <Text style={styles.verifiedText}>Verified Account</Text>
-                  </View>
-                )}
+                ) : null}
               </View>
             </View>
 
-            {/* Quick Profile Edit Action Button */}
-            <Pressable
-              onPress={() => handleItemPress(() => onOpenProfile?.() || onNavigateTab('profile'))}
-              style={({ pressed }) => [
-                styles.viewProfileBtn,
-                pressed && styles.itemPressed,
-              ]}
-            >
-              <Ionicons name="person-circle-outline" size={16} color="#F59E0B" />
-              <Text style={styles.viewProfileBtnText}>Business Profile & Bank Details</Text>
-              <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
-            </Pressable>
+
+
           </View>
 
           {/* ========================================================= */}
@@ -385,15 +371,21 @@ const styles = StyleSheet.create({
     }),
   },
 
-  /* 1. Profile Top Card */
+  /* 1. Profile Top Card (Matching Premium Light Theme) */
   profileHeaderCard: {
-    backgroundColor: '#162032', // Deep slate navy
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     paddingTop: Platform.OS === 'ios' ? 48 : 28,
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     position: 'relative',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)' },
+      default: { elevation: 2 },
+    }),
   },
   closeBtn: {
     position: 'absolute',
@@ -402,7 +394,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
@@ -435,7 +427,7 @@ const styles = StyleSheet.create({
   avatarFallbackText: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   onlineDot: {
     position: 'absolute',
@@ -446,7 +438,7 @@ const styles = StyleSheet.create({
     borderRadius: 6.5,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: '#162032',
+    borderColor: '#FFFFFF',
   },
   profileTextWrap: {
     flex: 1,
@@ -455,18 +447,18 @@ const styles = StyleSheet.create({
   contractorName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0F172A',
     letterSpacing: -0.3,
   },
   firmName: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: 2,
   },
   phoneText: {
     fontSize: 11,
-    color: '#CBD5E1',
+    color: '#64748B',
     fontWeight: '500',
     marginTop: 3,
   },
@@ -485,9 +477,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#E2E8F0',
     borderRadius: 12,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -495,7 +487,7 @@ const styles = StyleSheet.create({
   },
   viewProfileBtnText: {
     flex: 1,
-    color: '#F8FAFC',
+    color: '#0F172A',
     fontSize: 12,
     fontWeight: '700',
     marginLeft: 8,
