@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../icons/AppIcon';
 
@@ -18,6 +19,9 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ tabs, activeTab, onTabPress, onCenterPress }: BottomNavProps) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 10);
+
   const renderTab = (tab: TabItem) => {
     const isActive = activeTab === tab.key;
     const activeIconName = tab.icon.endsWith('-outline')
@@ -62,7 +66,7 @@ export function BottomNav({ tabs, activeTab, onTabPress, onCenterPress }: Bottom
   const hasCenterFab = Boolean(onCenterPress && tabs.length === 4);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: bottomPadding }]}>
       <View style={styles.inner}>
         {hasCenterFab ? (
           <>

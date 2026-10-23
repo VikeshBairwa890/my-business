@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scroll: {
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   container: {
     maxWidth: 800,

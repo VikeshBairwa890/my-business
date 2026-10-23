@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
     }),
   },
   scroll: {
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
 
   /* 0. Fixed Dark Backdrop Extension (stays behind top card with rounded corners, wrapping around it) */
