@@ -1126,14 +1126,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     alignItems: 'center',
     width: '100%',
-    ...Platform.select({
-      web: {
-        height: '100dvh',
-      } as any,
-      default: {
-        height: '100%',
-      },
-    }),
+    height: '100%',
   },
   root: {
     flex: 1,
@@ -1142,8 +1135,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     ...Platform.select({
       web: {
-        height: '100dvh',
-        maxHeight: '100dvh',
+        height: '100vh',
         boxShadow: '0 0 32px rgba(0, 0, 0, 0.08)',
         position: 'relative',
         overflow: 'hidden',

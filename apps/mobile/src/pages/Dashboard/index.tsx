@@ -419,11 +419,6 @@ export function DashboardPage({
 
   return (
     <View style={styles.pageWrapper}>
-      {/* 0. FIXED DARK BACKDROP EXTENSION (Fixed at top, zIndex 1, wraps around statement card) */}
-      <View style={styles.fixedDarkBackdropWrapper}>
-        <View style={styles.fixedDarkBackdrop} />
-      </View>
-
       {/* 1. FIXED TOP HEADER (Logo, Greeting, Bell, Search Bar - zIndex 100) */}
       <View style={styles.fixedHeaderOuter}>
         <View style={styles.darkHeaderCard}>
@@ -513,6 +508,9 @@ export function DashboardPage({
           ) : undefined
         }
       >
+        {/* Dark curved backdrop extension that peeks behind the top card with rounded corners, exactly matching PC layout */}
+        <View style={styles.darkBackdropExtension} pointerEvents="none" />
+
         <View style={styles.bodyContainer}>
           <View style={[styles.whiteCard, styles.monthCard, isDesktop && styles.desktopCard]}>
             <View style={styles.monthCardHeader}>
@@ -863,29 +861,26 @@ const styles = StyleSheet.create({
     }),
   },
   scroll: {
-    paddingBottom: 120,
+    paddingBottom: 110,
   },
 
-  /* 0. Fixed Dark Backdrop Extension (stays behind top card with rounded corners, wrapping around it) */
-  fixedDarkBackdropWrapper: {
+  /* Dark Curved Backdrop Extension (placed inside ScrollView so it stays behind bodyContainer and scrolls naturally) */
+  darkBackdropExtension: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    alignItems: 'center',
-    zIndex: 1,
-    pointerEvents: 'none',
-  },
-  fixedDarkBackdrop: {
-    height: 210,
-    maxWidth: 600,
-    width: '100%',
+    height: 85,
     backgroundColor: '#162032',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    zIndex: 1,
     ...Platform.select({
       web: { boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)' },
-      default: { elevation: 0 },
+      default: { elevation: 1 },
     }),
   },
 

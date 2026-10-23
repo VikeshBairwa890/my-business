@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scroll: {
-    paddingBottom: 120,
+    paddingBottom: 110,
   },
   container: {
     width: '100%',
