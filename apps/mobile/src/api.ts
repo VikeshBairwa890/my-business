@@ -6,10 +6,17 @@ import * as Crypto from 'expo-crypto';
 const TOKEN_KEY = 'thekabook_session';
 
 export function getApiBaseUrl(): string {
-  // 1. Web browser running on localhost: Always connect to local API directly
+  // 1. Web browser running locally (localhost or local LAN IP):
+  // Always connect directly to port 4000 to avoid tunnel latency and 408 timeouts
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname || 'localhost';
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      /^192\.168\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+    ) {
       return `http://${hostname}:4000`;
     }
   }
