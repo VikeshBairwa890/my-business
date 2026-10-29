@@ -169,9 +169,9 @@ export function DashboardPage({
         totalToPay: 6230000,     // ₹62,300 demo/default if empty
         weeklyEarnings: 3820000,  // ₹38,200 demo/default if empty
         netCash: 12220000,
-        totalSites: 0,
-        runningSitesCount: 0,
-        totalWorkers: 0,
+        totalSites: 3,
+        runningSitesCount: 3,
+        totalWorkers: 48,
         todayPresent: 0,
       };
     }
@@ -216,9 +216,9 @@ export function DashboardPage({
       totalToPay,
       weeklyEarnings,
       netCash,
-      totalSites: (data.sites || []).length,
-      runningSitesCount: (data.sites || []).filter((s) => s.status !== 'COMPLETED').length,
-      totalWorkers: (data.workers || []).filter((w) => w.active).length,
+      totalSites: hasData ? (data.sites || []).length : 3,
+      runningSitesCount: hasData ? (data.sites || []).filter((s) => s.status !== 'COMPLETED').length : 3,
+      totalWorkers: hasData ? (data.workers || []).filter((w) => w.active).length : 48,
       todayPresent: (data.attendance || []).filter(
         (a) => String(a.date).slice(0, 10) === new Date().toISOString().slice(0, 10)
       ).length,
@@ -338,7 +338,7 @@ export function DashboardPage({
     [
       {
         id: 'attendance',
-        label: 'Daily Attendance',
+        label: 'Attendance',
         icon: 'calendar-outline',
         bg: '#EEF2FF',
         border: '#C7D2FE',
@@ -500,35 +500,18 @@ export function DashboardPage({
         }
       >
         <View style={styles.bodyContainer}>
-          <View style={[styles.whiteCard, styles.monthCard, isDesktop && styles.desktopCard]}>
-            <View style={styles.monthCardHeader}>
-              <Text style={styles.monthCardTitle}>This Month's Statement</Text>
-              {/* <View style={styles.monthBadge}>
-                <Text style={styles.monthBadgeText}>{currentMonthStr}</Text>
-              </View> */}
+          {/* Sites & Active Workers Two Separate Cards */}
+          <View style={[styles.summaryCardsRow, isDesktop && styles.desktopCard]}>
+            {/* Card 1: Total Sites */}
+            <View style={[styles.whiteCard, styles.statCardItem]}>
+              <Text style={styles.statCardLabel}>Total Sites</Text>
+              <Text style={styles.statCardValue}>{stats.totalSites}</Text>
             </View>
 
-            {/* Split Dues: Aapko milna hai & Aapko dena hai */}
-            <View style={styles.splitDuesRow}>
-              {/* Left Green Box: Aapko milna hai */}
-              <View style={[styles.dueBox, styles.dueBoxGreen]}>
-                <Text style={[styles.dueBoxLabel, styles.dueLabelGreen]}>
-                  Amount to Collect
-                </Text>
-                <Text style={[styles.dueBoxAmount, styles.dueAmountGreen]}>
-                  {money(stats.totalToCollect)}
-                </Text>
-              </View>
-
-              {/* Right Red Box: Aapko dena hai */}
-              <View style={[styles.dueBox, styles.dueBoxRed]}>
-                <Text style={[styles.dueBoxLabel, styles.dueLabelRed]}>
-                  Amount to Pay
-                </Text>
-                <Text style={[styles.dueBoxAmount, styles.dueAmountRed]}>
-                  {money(stats.totalToPay)}
-                </Text>
-              </View>
+            {/* Card 2: Active Workers */}
+            <View style={[styles.whiteCard, styles.statCardItem]}>
+              <Text style={styles.statCardLabel}>Active Workers</Text>
+              <Text style={styles.statCardValue}>{stats.totalWorkers}</Text>
             </View>
           </View>
 
@@ -1026,7 +1009,35 @@ const styles = StyleSheet.create({
     }),
   },
 
-  /* 2A. Is mahine ka hisaab */
+  /* 2A. Two Separate Stat Cards Row */
+  summaryCardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    width: '100%',
+  },
+  statCardItem: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  statCardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 2,
+    letterSpacing: 0.1,
+  },
+  statCardValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0F2851',
+    letterSpacing: -0.5,
+  },
   monthCard: {
     padding: 16,
     marginBottom: 16,

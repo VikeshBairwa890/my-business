@@ -35,6 +35,14 @@ export class AttendanceService {
     const overtimeMinutes = Number(data.overtimeMinutes ?? data.overtime_minutes ?? 0);
     const notes = data.notes || '';
 
+    // Validate that attendance cannot be marked for future dates
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const inputDateStr = String(dateStr).slice(0, 10);
+    if (inputDateStr > todayStr) {
+      throw new Error('Attendance cannot be marked for future dates');
+    }
+
+
     // Verify worker exists and is active
     const worker = await prisma.worker.findFirst({
       where: { orgId, id: workerId },

@@ -170,7 +170,7 @@ export function WorkerDetailPage({
 
   const TABS = [
     { key: 'OVERVIEW' as PageTab, icon: 'bar-chart', label: t('overview', 'Overview') },
-    { key: 'ATTENDANCE' as PageTab, icon: 'calendar', label: t('navAttendance', 'Haziri') },
+    { key: 'ATTENDANCE' as PageTab, icon: 'calendar', label: t('navAttendance', 'Attendance') },
     { key: 'PAYMENTS' as PageTab, icon: 'wallet', label: t('payments', 'Payments') },
   ];
 

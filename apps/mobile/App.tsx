@@ -26,7 +26,7 @@ import { VoidEntryModal } from './src/components/common/VoidEntryModal';
 import { AuthPage } from './src/pages/Auth';
 import { DashboardPage } from './src/pages/Dashboard';
 import { SitesPage, NewSitePage } from './src/pages/Sites';
-import { AttendancePage } from './src/pages/Attendance';
+import { AttendancePage, BulkAttendancePage } from './src/pages/Attendance';
 import { LabourPage } from './src/pages/Labour';
 import { HisabPage } from './src/pages/Hisab';
 import { ReportsPage } from './src/pages/Reports';
@@ -44,7 +44,7 @@ import {
 
 // API & Helpers
 import { request, commandKey, UserInfo } from './src/api';
-import { attendanceForm, entryForm, siteForm, workerForm, voidForm } from './src/forms';
+import { attendanceForm, entryForm, siteForm, workerForm, voidForm, today } from './src/forms';
 import { pdfReport, shareReport } from './src/report';
 import { FormSpec, Row, Snapshot } from './src/types';
 import { LanguageProvider, useLanguage } from './src/i18n';
@@ -82,6 +82,9 @@ function MainApp() {
       }
       if (path === '/entry/extra') {
         return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'EXTRA' };
+      }
+      if (path === '/attendance/daily' || path === '/daily-attendance' || path === '/haziri') {
+        return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'BULK_ATTENDANCE' };
       }
       if (path === '/sites/new') {
         return { tab: 'sites', selectedSiteId: null, selectedWorkerId: null, isNewSite: true, activeEntryKind: null };
@@ -250,7 +253,42 @@ function MainApp() {
       });
       setForm(null);
       pendingRef.current = null;
-      showToast('Saved successfully', 's');
+
+      // Smart, context-aware success messages
+      let successMsg = lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully';
+
+      if (form.action === 'attendance.save') {
+        const isUpdate = Boolean(form.entity_id) || form.title.toLowerCase().includes('correct');
+        const recordDate = String(body.data?.date || '').slice(0, 10);
+        const todayStr = today();
+        const isPastDate = Boolean(recordDate && recordDate < todayStr);
+
+        if (isUpdate) {
+          successMsg = lang === 'hi'
+            ? 'हाजिरी सफलतापूर्वक अपडेट हो गई'
+            : 'Attendance updated successfully';
+        } else if (isPastDate) {
+          successMsg = lang === 'hi'
+            ? 'पिछली तारीख की हाजिरी दर्ज हो गई'
+            : 'Past date attendance marked successfully';
+        } else {
+          successMsg = lang === 'hi'
+            ? 'हाजिरी सफलतापूर्वक दर्ज हो गई'
+            : 'Attendance marked successfully';
+        }
+      } else if (form.action === 'site.create') {
+        successMsg = lang === 'hi' ? 'साइट सफलतापूर्वक बन गई' : 'Site created successfully';
+      } else if (form.action === 'site.update') {
+        successMsg = lang === 'hi' ? 'साइट अपडेट हो गई' : 'Site updated successfully';
+      } else if (form.action === 'worker.create') {
+        successMsg = lang === 'hi' ? 'मजदूर सफलतापूर्वक जुड़ गया' : 'Worker added successfully';
+      } else if (form.action === 'worker.update') {
+        successMsg = lang === 'hi' ? 'मजदूर जानकारी अपडेट हो गई' : 'Worker updated successfully';
+      } else if (form.action === 'entry.void') {
+        successMsg = lang === 'hi' ? 'एंट्री रद्द कर दी गई' : 'Entry voided successfully';
+      }
+
+      showToast(successMsg, 's');
       await refresh();
     } catch (e: any) {
       setError(e.message);
@@ -322,9 +360,11 @@ function MainApp() {
                       ? '/entry/expense'
                       : entryKind === 'EXTRA'
                         ? '/entry/extra'
-                        : newTab === 'home'
-                          ? '/'
-                          : `/${newTab}`);
+                        : entryKind === 'BULK_ATTENDANCE'
+                          ? '/attendance/daily'
+                          : newTab === 'home'
+                            ? '/'
+                            : `/${newTab}`);
       if (window.location.pathname !== targetUrl) {
         window.history.pushState(null, '', targetUrl);
       }
@@ -478,6 +518,12 @@ function MainApp() {
           setSelectedSiteId(null);
           setSelectedWorkerId(null);
           setActiveEntryKind(null);
+        } else if (path === '/attendance/daily' || path === '/daily-attendance' || path === '/haziri') {
+          setTab('home');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('BULK_ATTENDANCE');
         } else if (path === '/attendance') {
           setTab('attendance');
           setIsNewSite(false);
@@ -806,6 +852,18 @@ function MainApp() {
               refreshing={refreshing}
               onOpenProfile={() => handleNavigate('profile')}
             />
+          ) : activeEntryKind === 'BULK_ATTENDANCE' && data ? (
+            <BulkAttendancePage
+              data={data}
+              initialSiteId={activeEntryParams?.siteId || undefined}
+              onBack={() => {
+                setActiveEntryKind(null);
+                setActiveEntryParams(null);
+                navigate('home', '/', null, false, null, null);
+              }}
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+            />
           ) : (
             <>
               {tab === 'sites' && (
@@ -920,12 +978,14 @@ function MainApp() {
         </View>
 
         {/* Footer Bottom Navigation with Center Golden Action FAB */}
-        <BottomNav
-          tabs={navTabs}
-          activeTab={tab}
-          onTabPress={handleNavigate}
-          onCenterPress={() => setShowFabModal(true)}
-        />
+        {!activeEntryKind && !isNewSite && (
+          <BottomNav
+            tabs={navTabs}
+            activeTab={tab}
+            onTabPress={handleNavigate}
+            onCenterPress={() => setShowFabModal(true)}
+          />
+        )}
 
         {/* FAB Quick Action Sheet */}
         {showFabModal ? (
@@ -947,20 +1007,22 @@ function MainApp() {
                   <View style={[styles.fabActionIconBox, { backgroundColor: '#EFF6FF' }]}>
                     <Ionicons name="business" size={24} color="#1D4ED8" />
                   </View>
-                  <Text style={styles.fabActionLabel}>Nayi Site</Text>
+                  <Text style={styles.fabActionLabel}>New Site</Text>
                 </Pressable>
 
                 <Pressable
                   style={styles.fabActionBtn}
                   onPress={() => {
                     setShowFabModal(false);
-                    openAttendanceModal();
+                    setActiveEntryKind('BULK_ATTENDANCE');
+                    setActiveEntryParams(null);
+                    navigate('home', '/attendance/daily', null, false, null, 'BULK_ATTENDANCE');
                   }}
                 >
                   <View style={[styles.fabActionIconBox, { backgroundColor: '#EEF2FF' }]}>
                     <Ionicons name="calendar" size={24} color="#4338CA" />
                   </View>
-                  <Text style={styles.fabActionLabel}>Daily Haziri</Text>
+                  <Text style={styles.fabActionLabel}>Bulk Attendance</Text>
                 </Pressable>
 
                 <Pressable

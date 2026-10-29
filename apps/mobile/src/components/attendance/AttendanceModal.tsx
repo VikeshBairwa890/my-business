@@ -39,31 +39,31 @@ const STATUS_OPTIONS: Array<{
   bgColor: string;
   borderColor: string;
 }> = [
-  {
-    units: '1',
-    label: 'Present',
-    icon: 'checkmark-circle',
-    color: '#16A34A',
-    bgColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  {
-    units: '0.5',
-    label: 'Half Day',
-    icon: 'time',
-    color: '#D97706',
-    bgColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  {
-    units: '0',
-    label: 'Absent',
-    icon: 'close-circle',
-    color: '#DC2626',
-    bgColor: '#FEF2F2',
-    borderColor: '#FECACA',
-  },
-];
+    {
+      units: '1',
+      label: 'Present',
+      icon: 'checkmark-circle',
+      color: '#16A34A',
+      bgColor: '#F0FDF4',
+      borderColor: '#BBF7D0',
+    },
+    {
+      units: '0.5',
+      label: 'Half Day',
+      icon: 'time',
+      color: '#D97706',
+      bgColor: '#FFFBEB',
+      borderColor: '#FDE68A',
+    },
+    {
+      units: '0',
+      label: 'Absent',
+      icon: 'close-circle',
+      color: '#DC2626',
+      bgColor: '#FEF2F2',
+      borderColor: '#FECACA',
+    },
+  ];
 
 export function AttendanceModal({
   spec,
@@ -77,6 +77,11 @@ export function AttendanceModal({
   const isDesktop = width > 768;
 
   const isCorrection = spec.title.toLowerCase().includes('correct');
+  const isWorkerLocked = Boolean(
+    spec.initial.locked_worker_id ||
+    (spec.fields && spec.fields.find((f) => f.key === 'worker_id')?.options?.length === 1) ||
+    spec.entity_id
+  );
 
   // Form State
   const [siteId, setSiteId] = useState<string>(
@@ -132,8 +137,11 @@ export function AttendanceModal({
     );
   }, [data.sites, siteSearch]);
 
-  // Filtered active workers for worker picker
+  // Filtered active workers for worker picker (locked to single worker when targeted)
   const filteredWorkers = useMemo(() => {
+    if (isWorkerLocked && selectedWorker) {
+      return [selectedWorker];
+    }
     const list = data.workers.filter((w) => w.active);
     if (!workerSearch.trim()) return list;
     const q = workerSearch.toLowerCase();
@@ -142,7 +150,7 @@ export function AttendanceModal({
         w.name.toLowerCase().includes(q) ||
         (w.skill && w.skill.toLowerCase().includes(q))
     );
-  }, [data.workers, workerSearch]);
+  }, [data.workers, workerSearch, isWorkerLocked, selectedWorker]);
 
   // Wage calculation preview
   const wageCalc = useMemo(() => {
@@ -205,6 +213,11 @@ export function AttendanceModal({
     return `${remainder} min`;
   };
 
+  const formatRupees = (amount: number | string | undefined | null) => {
+    const num = Number(amount) || 0;
+    return `₹${Math.round(num).toLocaleString('en-IN')}`;
+  };
+
   const handleSave = () => {
     setLocalError('');
     if (!siteId) {
@@ -217,6 +230,11 @@ export function AttendanceModal({
     }
     if (!date) {
       setLocalError('Please pick a date.');
+      return;
+    }
+    const todayStr = today();
+    if (String(date).slice(0, 10) > todayStr) {
+      setLocalError('Attendance cannot be marked for future dates.');
       return;
     }
     if (isCorrection && !notes.trim()) {
@@ -265,12 +283,12 @@ export function AttendanceModal({
                 </View>
                 <View>
                   <Text style={styles.headerTitle}>
-                    {isCorrection ? 'Correct Attendance' : 'Mark Daily Attendance'}
+                    {isCorrection ? 'Update Attendance' : 'Mark Attendance'}
                   </Text>
                   <Text style={styles.headerSubtitle}>
                     {isCorrection
-                      ? 'Update presence, half-day or overtime'
-                      : 'Record daily worker presence & haziri'}
+                      ? 'Update daily presence, half-day or overtime'
+                      : 'Record daily attendance & overtime'}
                   </Text>
                 </View>
               </View>
@@ -300,560 +318,383 @@ export function AttendanceModal({
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.scrollBody}
             >
-              {/* 1. DATE SELECTOR SECTION */}
+              {/* 1. ATTENDANCE DATE CARD */}
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeadingRow}>
                   <AppIcon name="calendar-outline" size={16} color="#2563EB" />
                   <Text style={styles.sectionTitle}>Attendance Date</Text>
+                  {isToday && (
+                    <View style={styles.todayPill}>
+                      <Text style={styles.todayPillText}>Today</Text>
+                    </View>
+                  )}
                 </View>
 
-                <View style={styles.dateDisplayRow}>
-                  <Pressable
-                    onPress={() => setIsCalendarOpen(true)}
-                    style={({ pressed }) => [
-                      styles.datePickerBtn,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    accessibilityLabel="Pick date"
+                <Pressable
+                  onPress={() => setIsCalendarOpen(true)}
+                  style={({ pressed }) => [
+                    styles.datePickerBtn,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  accessibilityLabel="Pick date"
+                >
+                  <View style={styles.dateIconBox}>
+                    <AppIcon name="calendar" size={17} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.datePickerMainText}>{formattedDate}</Text>
+                    <Text style={styles.datePickerSubText}>Tap to change date</Text>
+                  </View>
+                  <View style={styles.changeDateChip}>
+                    <Text style={styles.changeDateChipText}>Change</Text>
+                  </View>
+                </Pressable>
+              </View>
+
+              {/* 2. WORK SITE SELECTOR (Full-Width Card) */}
+              <View style={[styles.sectionCard, { zIndex: 30 }]}>
+                <View style={styles.sectionHeadingRow}>
+                  <AppIcon name="business-outline" size={16} color="#0284C7" />
+                  <Text style={styles.sectionTitle}>Work Site *</Text>
+                  <Text style={styles.sectionSubBadge}>Tap to change site</Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.dropdownSelectorBtn,
+                    styles.fullWidthSelectorBtn,
+                    { position: 'relative' },
+                  ]}
+                >
+                  <View style={styles.dropdownIconBoxSite}>
+                    <AppIcon name="business" size={18} color="#0284C7" />
+                  </View>
+                  <View style={styles.dropdownContentCol}>
+                    <Text style={styles.dropdownMainText} numberOfLines={1}>
+                      {selectedSite?.name || 'Select Work Site'}
+                    </Text>
+                    <Text style={styles.dropdownSubText} numberOfLines={1}>
+                      Project Site • Tap to change
+                    </Text>
+                  </View>
+                  <AppIcon name="chevron-down" size={16} color="#64748B" />
+
+                  {/* Universal Native Picker for Mobile & Web */}
+                  <Picker
+                    selectedValue={siteId}
+                    onValueChange={(val: any) => setSiteId(String(val))}
+                    style={styles.nativeHiddenPicker}
+                    dropdownIconColor="transparent"
+                    prompt="Select Work Site"
                   >
-                    <Text style={styles.datePickerText}>{formattedDate}</Text>
-                    <View style={{ marginLeft: 'auto' }}>
+                    {data.sites.map((s) => (
+                      <Picker.Item
+                        key={s.id}
+                        label={`🏢 ${s.name}`}
+                        value={s.id}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+
+              {/* 4. WORKER SELECTOR (Only when worker is NOT locked) */}
+              {!isWorkerLocked && (
+                <View style={[styles.sectionCard, { zIndex: 25 }]}>
+                  <View style={styles.sectionHeadingRow}>
+                    <AppIcon name="people-outline" size={16} color="#4F46E5" />
+                    <Text style={styles.sectionTitle}>
+                      Worker ({filteredWorkers.length}) *
+                    </Text>
+                    <Text style={styles.sectionSubBadge}>Tap to select</Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.dropdownSelectorBtn,
+                      styles.fullWidthSelectorBtn,
+                      { position: 'relative' },
+                    ]}
+                  >
+                    <View style={styles.dropdownIconBoxWorker}>
+                      <Text style={styles.dropdownAvatarInitials}>
+                        {(selectedWorker?.name || 'W').slice(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.dropdownContentCol}>
+                      <Text style={styles.dropdownMainText} numberOfLines={1}>
+                        {selectedWorker?.name || 'Select Worker'}
+                      </Text>
+                      <Text style={styles.dropdownSubText} numberOfLines={1}>
+                        {selectedWorker
+                          ? `${selectedWorker.skill || 'Worker'} • ${formatRupees(selectedWorker.daily_rate)}/day`
+                          : 'Tap to choose worker'}
+                      </Text>
+                    </View>
+                    <AppIcon name="chevron-down" size={16} color="#64748B" />
+
+                    <Picker
+                      selectedValue={workerId}
+                      onValueChange={(val: any) => setWorkerId(String(val))}
+                      style={styles.nativeHiddenPicker}
+                      dropdownIconColor="transparent"
+                      prompt="Select Worker"
+                    >
+                      {data.workers.filter((w) => w.active).map((w) => (
+                        <Picker.Item
+                          key={w.id}
+                          label={`👷 ${w.name}${w.skill ? ` (${w.skill})` : ''} - ${formatRupees(w.daily_rate)}/day`}
+                          value={w.id}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+              )}
+
+              {/* 5. ATTENDANCE STATUS - 3 PROMINENT SEGMENTED CARDS */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeadingRow}>
+                  <AppIcon name="shield-checkmark-outline" size={16} color="#16A34A" />
+                  <Text style={styles.sectionTitle}>Attendance Status *</Text>
+                  <Text style={styles.sectionSubBadge}>Tap one to select</Text>
+                </View>
+
+                <View style={styles.statusSegmentedRow}>
+                  {/* Option 1: Present (Full Day) */}
+                  <Pressable
+                    onPress={() => setUnits('1')}
+                    style={({ pressed }) => [
+                      styles.statusCardBtn,
+                      units === '1' ? styles.statusCardActivePresent : styles.statusCardInactive,
+                      pressed && { transform: [{ scale: 0.97 }] },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Select Present Full Day"
+                  >
+                    <View style={[styles.statusCardIconBox, units === '1' && styles.statusCardIconBoxPresent]}>
                       <AppIcon
-                        name="calendar"
-                        size={18}
-                        color="#2563EB"
+                        name="checkmark-circle"
+                        size={20}
+                        color={units === '1' ? '#15803D' : '#64748B'}
                       />
                     </View>
+                    <Text style={[styles.statusCardTitle, units === '1' && styles.statusCardTitlePresent]}>
+                      Present
+                    </Text>
+                    <Text style={[styles.statusCardSub, units === '1' && styles.statusCardSubPresent]}>
+                      Full Day (1.0)
+                    </Text>
+                    <Text style={[styles.statusCardWage, units === '1' && styles.statusCardWagePresent]}>
+                      {selectedWorker ? formatRupees(selectedWorker.daily_rate) : 'Full Day'}
+                    </Text>
+                  </Pressable>
+
+                  {/* Option 2: Half Day */}
+                  <Pressable
+                    onPress={() => setUnits('0.5')}
+                    style={({ pressed }) => [
+                      styles.statusCardBtn,
+                      units === '0.5' ? styles.statusCardActiveHalf : styles.statusCardInactive,
+                      pressed && { transform: [{ scale: 0.97 }] },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Select Half Day"
+                  >
+                    <View style={[styles.statusCardIconBox, units === '0.5' && styles.statusCardIconBoxHalf]}>
+                      <AppIcon
+                        name="time"
+                        size={20}
+                        color={units === '0.5' ? '#B45309' : '#64748B'}
+                      />
+                    </View>
+                    <Text style={[styles.statusCardTitle, units === '0.5' && styles.statusCardTitleHalf]}>
+                      Half Day
+                    </Text>
+                    <Text style={[styles.statusCardSub, units === '0.5' && styles.statusCardSubHalf]}>
+                      0.5 Day
+                    </Text>
+                    <Text style={[styles.statusCardWage, units === '0.5' && styles.statusCardWageHalf]}>
+                      {selectedWorker ? formatRupees(Math.round(Number(selectedWorker.daily_rate) * 0.5)) : 'Half Day'}
+                    </Text>
+                  </Pressable>
+
+                  {/* Option 3: Absent */}
+                  <Pressable
+                    onPress={() => {
+                      setUnits('0');
+                      setOvertimeMinutes('0');
+                    }}
+                    style={({ pressed }) => [
+                      styles.statusCardBtn,
+                      units === '0' ? styles.statusCardActiveAbsent : styles.statusCardInactive,
+                      pressed && { transform: [{ scale: 0.97 }] },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Select Absent"
+                  >
+                    <View style={[styles.statusCardIconBox, units === '0' && styles.statusCardIconBoxAbsent]}>
+                      <AppIcon
+                        name="close-circle"
+                        size={20}
+                        color={units === '0' ? '#B91C1C' : '#64748B'}
+                      />
+                    </View>
+                    <Text style={[styles.statusCardTitle, units === '0' && styles.statusCardTitleAbsent]}>
+                      Absent
+                    </Text>
+                    <Text style={[styles.statusCardSub, units === '0' && styles.statusCardSubAbsent]}>
+                      0 Day
+                    </Text>
+                    <Text style={[styles.statusCardWage, units === '0' && styles.statusCardWageAbsent]}>
+                      ₹0
+                    </Text>
                   </Pressable>
                 </View>
               </View>
 
-              {/* 2. COMBINED WORK SITE & WORKER SELECTOR CARD (Side-by-Side Dropdowns) */}
-              <View style={[styles.sectionCard, { zIndex: 30 }]}>
-                <View style={styles.sectionHeadingRow}>
-                  <AppIcon name="business-outline" size={16} color="#0284C7" />
-                  <Text style={styles.sectionTitle}>Site & Worker</Text>
-                  <Text style={styles.sectionSubBadge}>Tap dropdown to select</Text>
-                </View>
-
-                <View style={styles.dualDropdownRow}>
-                  {/* Left Column: Work Site Dropdown / Select Bar */}
-                  <View style={styles.dropdownCol}>
-                    <Text style={styles.dropdownFieldLabel}>Work Site *</Text>
-                    <View
-                      style={[
-                        styles.dropdownSelectorBtn,
-                        { position: 'relative' },
-                      ]}
-                    >
-                      <View style={styles.dropdownIconBoxSite}>
-                        <AppIcon name="business" size={16} color="#0284C7" />
-                      </View>
-                      <View style={styles.dropdownContentCol}>
-                        <Text style={styles.dropdownMainText} numberOfLines={1}>
-                          {selectedSite?.name || 'Select Site'}
-                        </Text>
-                        <Text style={styles.dropdownSubText} numberOfLines={1}>
-                          {selectedSite?.name ? 'Work Site' : 'Select site'}
-                        </Text>
-                      </View>
-                      <AppIcon
-                        name="chevron-down"
-                        size={15}
-                        color="#64748B"
-                      />
-
-                      {/* Universal Native Picker for Mobile & Web */}
-                      <Picker
-                        selectedValue={siteId}
-                        onValueChange={(val: any) => setSiteId(String(val))}
-                        style={styles.nativeHiddenPicker}
-                        dropdownIconColor="transparent"
-                        prompt="Select Work Site"
-                      >
-                        {data.sites.map((s) => (
-                          <Picker.Item
-                            key={s.id}
-                            label={`🏢 ${s.name}`}
-                            value={s.id}
-                          />
-                        ))}
-                      </Picker>
-                    </View>
-
-                    {/* Work Site Inline Dropdown Menu */}
-                    {isSiteDropdownOpen && (
-                      <View style={styles.statusDropdownMenu}>
-                        {data.sites.length > 5 && (
-                          <View style={styles.inlineSearchBox}>
-                            <AppIcon name="search" size={13} color={Colors.textMuted} />
-                            <TextInput
-                              value={siteSearch}
-                              onChangeText={setSiteSearch}
-                              placeholder="Search site..."
-                              placeholderTextColor={Colors.textSubtle}
-                              style={styles.inlineSearchInput}
-                            />
-                          </View>
-                        )}
-                        <ScrollView
-                          style={{ maxHeight: 220 }}
-                          nestedScrollEnabled
-                          showsVerticalScrollIndicator
-                        >
-                          {filteredSites.map((s) => {
-                            const isSelected = s.id === siteId;
-                            return (
-                              <Pressable
-                                key={s.id}
-                                onPress={() => {
-                                  setSiteId(s.id);
-                                  setIsSiteDropdownOpen(false);
-                                }}
-                                style={({ pressed }) => [
-                                  styles.statusMenuItem,
-                                  isSelected && styles.statusMenuItemActive,
-                                  pressed && { opacity: 0.8 },
-                                ]}
-                              >
-                                <View
-                                  style={[
-                                    styles.statusMenuItemIcon,
-                                    { backgroundColor: isSelected ? '#E0F2FE' : '#F1F5F9' },
-                                  ]}
-                                >
-                                  <AppIcon
-                                    name="business"
-                                    size={14}
-                                    color={isSelected ? '#0284C7' : '#64748B'}
-                                  />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text
-                                    style={[
-                                      styles.statusMenuItemTitle,
-                                      isSelected && { color: '#0284C7', fontWeight: '800' },
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {s.name}
-                                  </Text>
-                                  <Text style={styles.statusMenuItemDesc} numberOfLines={1}>
-                                    Work Site
-                                  </Text>
-                                </View>
-                                {isSelected && (
-                                  <AppIcon name="checkmark" size={14} color="#0284C7" />
-                                )}
-                              </Pressable>
-                            );
-                          })}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Right Column: Select Worker Dropdown / Select Bar */}
-                  <View style={styles.dropdownCol}>
-                    <Text style={styles.dropdownFieldLabel}>
-                      Worker ({filteredWorkers.length}) *
-                    </Text>
-                    <View
-                      style={[
-                        styles.dropdownSelectorBtn,
-                        { position: 'relative' },
-                      ]}
-                    >
-                      <View style={styles.dropdownIconBoxWorker}>
-                        <Text style={styles.dropdownAvatarInitials}>
-                          {(selectedWorker?.name || 'W').slice(0, 2).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.dropdownContentCol}>
-                        <Text style={styles.dropdownMainText} numberOfLines={1}>
-                          {selectedWorker?.name || 'Select Worker'}
-                        </Text>
-                        <Text style={styles.dropdownSubText} numberOfLines={1}>
-                          {selectedWorker
-                            ? (selectedWorker.skill || 'Worker')
-                            : 'Select worker'}
-                        </Text>
-                      </View>
-                      <AppIcon
-                        name="chevron-down"
-                        size={15}
-                        color="#64748B"
-                      />
-
-                      {/* Universal Native Picker for Mobile & Web */}
-                      <Picker
-                        selectedValue={workerId}
-                        onValueChange={(val: any) => setWorkerId(String(val))}
-                        style={styles.nativeHiddenPicker}
-                        dropdownIconColor="transparent"
-                        prompt="Select Worker"
-                      >
-                        {data.workers.filter((w) => w.active).map((w) => (
-                          <Picker.Item
-                            key={w.id}
-                            label={`👷 ${w.name}${w.skill ? ` (${w.skill})` : ''}`}
-                            value={w.id}
-                          />
-                        ))}
-                      </Picker>
-                    </View>
-
-                    {/* Worker Inline Dropdown Menu */}
-                    {isWorkerDropdownOpen && (
-                      <View style={styles.statusDropdownMenu}>
-                        {data.workers.length > 5 && (
-                          <View style={styles.inlineSearchBox}>
-                            <AppIcon name="search" size={13} color={Colors.textMuted} />
-                            <TextInput
-                              value={workerSearch}
-                              onChangeText={setWorkerSearch}
-                              placeholder="Search worker..."
-                              placeholderTextColor={Colors.textSubtle}
-                              style={styles.inlineSearchInput}
-                            />
-                          </View>
-                        )}
-                        <ScrollView
-                          style={{ maxHeight: 220 }}
-                          nestedScrollEnabled
-                          showsVerticalScrollIndicator
-                        >
-                          {filteredWorkers.map((w) => {
-                            const isSelected = w.id === workerId;
-                            return (
-                              <Pressable
-                                key={w.id}
-                                onPress={() => {
-                                  setWorkerId(w.id);
-                                  setIsWorkerDropdownOpen(false);
-                                }}
-                                style={({ pressed }) => [
-                                  styles.statusMenuItem,
-                                  isSelected && styles.statusMenuItemActive,
-                                  pressed && { opacity: 0.8 },
-                                ]}
-                              >
-                                <View
-                                  style={[
-                                    styles.statusMenuItemIcon,
-                                    { backgroundColor: isSelected ? '#EDE9FE' : '#F1F5F9' },
-                                  ]}
-                                >
-                                  <Text
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: '800',
-                                      color: isSelected ? '#7C3AED' : '#64748B',
-                                    }}
-                                  >
-                                    {(w.name || 'W').slice(0, 2).toUpperCase()}
-                                  </Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text
-                                    style={[
-                                      styles.statusMenuItemTitle,
-                                      isSelected && { color: '#7C3AED', fontWeight: '800' },
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {w.name}
-                                  </Text>
-                                  <Text style={styles.statusMenuItemDesc} numberOfLines={1}>
-                                    {w.skill || 'Worker'}
-                                  </Text>
-                                </View>
-                                {isSelected && (
-                                  <AppIcon name="checkmark" size={14} color="#7C3AED" />
-                                )}
-                              </Pressable>
-                            );
-                          })}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </View>
-
-              {/* 3. COMBINED ATTENDANCE STATUS & OVERTIME (OT) CARD */}
-              <View style={[styles.sectionCard, { zIndex: 20 }]}>
+              {/* 6. OVERTIME (OT) SECTION */}
+              <View style={styles.sectionCard}>
                 <View style={styles.sectionHeadingRow}>
                   <View style={styles.sectionHeadingLeft}>
-                    <AppIcon name="shield-checkmark-outline" size={16} color="#16A34A" />
-                    <Text style={styles.sectionTitle}>Attendance & Overtime (OT)</Text>
+                    <AppIcon name="time-outline" size={16} color="#0284C7" />
+                    <Text style={styles.sectionTitle}>Overtime (OT)</Text>
                   </View>
                   <View style={styles.otRateHeaderBadge}>
-                    <AppIcon name="time-outline" size={12} color="#0284C7" />
                     <Text style={styles.otRateHeaderBadgeText}>
-                      OT: {money(selectedWorker?.overtime_rate || 0)}/hr
+                      OT: {formatRupees(selectedWorker?.overtime_rate || 0)}/hr
                     </Text>
                   </View>
                 </View>
 
-                <View style={styles.statusOtRow}>
-                  {/* Left Column: Attendance Status Dropdown (3 Items) */}
-                  <View style={styles.statusCol}>
-                    <View style={styles.colLabelRow}>
-                      <Text style={styles.colLabel}>Attendance Status *</Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusDropdownBtn,
-                        {
-                          borderColor: currentStatusOpt.borderColor,
-                          backgroundColor: isStatusDropdownOpen
-                            ? '#F8FAFC'
-                            : currentStatusOpt.bgColor,
-                        },
+                {units === '0' ? (
+                  <View style={styles.otDisabledRow}>
+                    <AppIcon name="information-circle-outline" size={16} color="#94A3B8" />
+                    <Text style={styles.otDisabledText}>Overtime is not applicable for Absent</Text>
+                  </View>
+                ) : (
+                  <View style={styles.otControlContainer}>
+                    {/* Tap to open Clock Picker */}
+                    <Pressable
+                      onPress={() => setIsClockPickerOpen(true)}
+                      style={({ pressed }) => [
+                        styles.otClockBtnClean,
+                        currentOtMins > 0 && styles.otClockBtnCleanActive,
+                        pressed && { opacity: 0.85 },
                       ]}
+                      accessibilityLabel="Open clock time picker"
                     >
                       <View
                         style={[
-                          styles.statusDropdownIconBadge,
-                          { backgroundColor: currentStatusOpt.bgColor },
+                          styles.otClockIconBadgeClean,
+                          currentOtMins > 0 && styles.otClockIconBadgeCleanActive,
                         ]}
                       >
                         <AppIcon
-                          name={currentStatusOpt.icon}
-                          size={17}
-                          color={currentStatusOpt.color}
+                          name="time"
+                          size={18}
+                          color={currentOtMins > 0 ? '#1D4ED8' : '#0284C7'}
                         />
                       </View>
-
-                      <View style={styles.statusDropdownContent}>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
                         <Text
                           style={[
-                            styles.statusDropdownMainText,
-                            { color: currentStatusOpt.color },
+                            styles.otClockMainText,
+                            currentOtMins > 0 && styles.otClockMainTextActive,
                           ]}
                           numberOfLines={1}
                         >
-                          {currentStatusOpt.label}
+                          {currentOtMins > 0 ? formatOtDuration(currentOtMins) : 'No Overtime (0 min)'}
                         </Text>
-                        <Text style={styles.statusDropdownSubText} numberOfLines={1}>
-                          {units === '1'
-                            ? (selectedWorker ? money(selectedWorker.daily_rate) : 'Present')
-                            : units === '0.5'
-                              ? (selectedWorker ? money(Math.round(Number(selectedWorker.daily_rate) * 0.5)) : 'Half Day')
-                              : 'Absent (₹0)'}
+                        <Text style={styles.otClockSubText}>
+                          {currentOtMins > 0
+                            ? `Earns +${formatRupees(wageCalc.overtime)} extra`
+                            : 'Tap to pick exact hours & minutes'}
                         </Text>
                       </View>
-
-                      <AppIcon
-                        name={isStatusDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                        size={15}
-                        color="#64748B"
-                      />
-
-                      {/* Universal Native Picker for Mobile & Web */}
-                      <Picker
-                        selectedValue={units}
-                        onValueChange={(val: any) => {
-                          const newUnits = String(val) as '1' | '0.5' | '0';
-                          setUnits(newUnits);
-                          if (newUnits === '0') {
-                            setOvertimeMinutes('0');
-                          }
-                        }}
-                        style={styles.nativeHiddenPicker}
-                        dropdownIconColor="transparent"
-                        prompt="Select Attendance Status"
-                      >
-                        <Picker.Item label="🟢 Present (Full Day)" value="1" />
-                        <Picker.Item label="🟡 Half Day" value="0.5" />
-                        <Picker.Item label="🔴 Absent" value="0" />
-                      </Picker>
-                    </View>
-
-                    {/* Dropdown Options (when open on Mobile) */}
-                    {Platform.OS !== 'web' && isStatusDropdownOpen && (
-                      <View style={styles.statusDropdownMenu}>
-                        {STATUS_OPTIONS.map((opt) => {
-                          const isSelected = units === opt.units;
-                          const wage =
-                            opt.units === '1'
-                              ? selectedWorker
-                                ? selectedWorker.daily_rate
-                                : 0
-                              : opt.units === '0.5'
-                                ? selectedWorker
-                                  ? Math.round(Number(selectedWorker.daily_rate) * 0.5)
-                                  : 0
-                                : 0;
-
-                          return (
-                            <Pressable
-                              key={opt.units}
-                              onPress={() => {
-                                setUnits(opt.units);
-                                if (opt.units === '0') {
-                                  setOvertimeMinutes('0');
-                                }
-                                setIsStatusDropdownOpen(false);
-                              }}
-                              style={({ pressed }) => [
-                                styles.statusMenuItem,
-                                isSelected && styles.statusMenuItemActive,
-                                pressed && { opacity: 0.8 },
-                              ]}
-                            >
-                              <View
-                                style={[
-                                  styles.statusMenuItemIcon,
-                                  { backgroundColor: opt.bgColor },
-                                ]}
-                              >
-                                <AppIcon name={opt.icon} size={15} color={opt.color} />
-                              </View>
-
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={[
-                                    styles.statusMenuItemTitle,
-                                    isSelected && { color: opt.color, fontWeight: '800' },
-                                  ]}
-                                >
-                                  {opt.label}
-                                </Text>
-
-                              </View>
-
-                              <Text
-                                style={[
-                                  styles.statusMenuItemWage,
-                                  isSelected && { color: opt.color, fontWeight: '800' },
-                                ]}
-                              >
-                                {money(wage)}
-                              </Text>
-
-                              {isSelected && (
-                                <AppIcon name="checkmark" size={14} color={opt.color} />
-                              )}
-                            </Pressable>
-                          );
-                        })}
+                      <View style={styles.otClockActionChip}>
+                        <AppIcon name="stopwatch" size={13} color="#2563EB" />
+                        <Text style={styles.otClockActionChipText}>Clock Picker</Text>
                       </View>
-                    )}
-                  </View>
+                    </Pressable>
 
-                  {/* Right Column: Overtime Watch / Clock Time Picker Button */}
-                  <View style={styles.otCol}>
-                    <View style={styles.colLabelRow}>
-                      <Text style={styles.colLabel}>Overtime (OT)</Text>
-                      {currentOtMins > 0 && units !== '0' && (
-                        <Text style={styles.otEarnedHighlight}>
-                          +{money(wageCalc.overtime)}
-                        </Text>
-                      )}
-                    </View>
-
-                    {units === '0' ? (
-                      /* Disabled State for Absent */
-                      <View style={styles.watchBoxDisabled}>
-                        <View style={styles.watchIconBadgeDisabled}>
-                          <AppIcon name="stopwatch-outline" size={17} color="#94A3B8" />
-                        </View>
-                        <View style={styles.otPickerContent}>
-                          <Text style={styles.watchDisabledTitle}>No Overtime</Text>
-                          <Text style={styles.watchDisabledSub} numberOfLines={1}>
-                            Absent worker has 0 OT
-                          </Text>
-                        </View>
-                        <View style={styles.watchDisabledPill}>
-                          <Text style={styles.watchDisabledPillText}>0h 00m</Text>
-                        </View>
-                      </View>
-                    ) : (
-                      /* Clean Clock Button - Tap to open interactive Clock Picker */
+                    {/* Quick Presets */}
+                    <View style={styles.otQuickPresetsRow}>
+                      <Text style={styles.otQuickPresetsLabel}>Quick Set:</Text>
                       <Pressable
-                        onPress={() => setIsClockPickerOpen(true)}
-                        style={({ pressed }) => [
-                          styles.otPickerTriggerBtn,
-                          currentOtMins > 0 && styles.otPickerTriggerBtnActive,
-                          pressed && { opacity: 0.85 },
-                        ]}
-                        accessibilityLabel="Open clock time picker"
+                        onPress={() => handleSetOvertime(0)}
+                        style={[styles.otQuickChip, currentOtMins === 0 && styles.otQuickChipActive]}
                       >
-                        <View
-                          style={[
-                            styles.otPickerIconBadge,
-                            currentOtMins > 0 && styles.otPickerIconBadgeActive,
-                          ]}
-                        >
-                          <AppIcon
-                            name="time"
-                            size={17}
-                            color={currentOtMins > 0 ? '#1D4ED8' : '#0284C7'}
-                          />
-                        </View>
-
-                        <View style={styles.otPickerContent}>
-                          <Text
-                            style={[
-                              styles.otPickerMainText,
-                              currentOtMins > 0 && styles.otPickerMainTextActive,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {currentOtMins > 0
-                              ? formatOtDuration(currentOtMins)
-                              : '0 min (No OT)'}
-                          </Text>
-                          <Text style={styles.otPickerSubText} numberOfLines={1}>
-                            {currentOtMins > 0
-                              ? `Overtime • +${money(wageCalc.overtime)}`
-                              : 'Tap to set hours & mins'}
-                          </Text>
-                        </View>
-
-                        <AppIcon name="chevron-forward" size={15} color="#64748B" />
+                        <Text style={[styles.otQuickChipText, currentOtMins === 0 && styles.otQuickChipTextActive]}>
+                          0 min
+                        </Text>
                       </Pressable>
-                    )}
+                      <Pressable
+                        onPress={() => handleSetOvertime(30)}
+                        style={[styles.otQuickChip, currentOtMins === 30 && styles.otQuickChipActive]}
+                      >
+                        <Text style={[styles.otQuickChipText, currentOtMins === 30 && styles.otQuickChipTextActive]}>
+                          +30m
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleSetOvertime(60)}
+                        style={[styles.otQuickChip, currentOtMins === 60 && styles.otQuickChipActive]}
+                      >
+                        <Text style={[styles.otQuickChipText, currentOtMins === 60 && styles.otQuickChipTextActive]}>
+                          +1 hr
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleSetOvertime(120)}
+                        style={[styles.otQuickChip, currentOtMins === 120 && styles.otQuickChipActive]}
+                      >
+                        <Text style={[styles.otQuickChipText, currentOtMins === 120 && styles.otQuickChipTextActive]}>
+                          +2 hrs
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
+                )}
               </View>
 
-              {/* 5. LIVE WAGE PREVIEW CARD */}
+              {/* 7. LIVE WAGE PREVIEW CARD */}
               <View style={styles.wagePreviewCard}>
                 <View style={styles.wagePreviewTop}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <AppIcon name="cash" size={17} color="#15803D" />
-                    <Text style={styles.wagePreviewHeading}>Today's Payable Wage</Text>
+                    <Text style={styles.wagePreviewHeading}>Payable Wage for Today</Text>
                   </View>
-                  <Text style={styles.wagePreviewWorkerName} numberOfLines={1}>
-                    {selectedWorker?.name}
-                  </Text>
+                  {!isWorkerLocked && selectedWorker?.name ? (
+                    <Text style={styles.wagePreviewWorkerName} numberOfLines={1}>
+                      {selectedWorker.name}
+                    </Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.wageBreakdownRow}>
                   <View style={styles.wageCol}>
-                    <Text style={styles.wageColLabel}>Base ({units} day)</Text>
-                    <Text style={styles.wageColVal}>{money(wageCalc.base)}</Text>
+                    <Text style={styles.wageColLabel}>
+                      Base ({units === '1' ? '1.0 Day' : units === '0.5' ? '0.5 Day' : '0 Day'})
+                    </Text>
+                    <Text style={styles.wageColVal}>{formatRupees(wageCalc.base)}</Text>
                   </View>
                   <Text style={styles.wageMathSign}>+</Text>
                   <View style={styles.wageCol}>
                     <Text style={styles.wageColLabel}>
                       OT ({currentOtMins}m)
                     </Text>
-                    <Text style={styles.wageColVal}>{money(wageCalc.overtime)}</Text>
+                    <Text style={styles.wageColVal}>{formatRupees(wageCalc.overtime)}</Text>
                   </View>
                   <Text style={styles.wageMathSign}>=</Text>
                   <View style={[styles.wageCol, { alignItems: 'flex-end' }]}>
                     <Text style={styles.wageColLabel}>Total Earned</Text>
-                    <Text style={styles.wageTotalAmount}>{money(wageCalc.total)}</Text>
+                    <Text style={styles.wageTotalAmount}>{formatRupees(wageCalc.total)}</Text>
                   </View>
                 </View>
               </View>
 
-              {/* 6. NOTES / CORRECTION REASON */}
+              {/* 8. NOTES / CORRECTION REASON */}
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeadingRow}>
                   <AppIcon name="create-outline" size={16} color={Colors.textSecondary} />
@@ -913,8 +754,15 @@ export function AttendanceModal({
               visible={isCalendarOpen}
               title="Select Attendance Date"
               selectedDate={date}
+              maxDate={today()}
               onSelect={(newDate) => {
-                if (newDate) setDate(newDate);
+                if (newDate) {
+                  if (newDate > today()) {
+                    setLocalError('Attendance cannot be marked for future dates.');
+                    return;
+                  }
+                  setDate(newDate);
+                }
               }}
               onClose={() => setIsCalendarOpen(false)}
             />
@@ -1078,11 +926,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  dateIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerMainText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  datePickerSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  changeDateChip: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#BFDBFE',
+  },
+  changeDateChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
   },
   datePickerText: {
     fontSize: 14,
@@ -1096,6 +975,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BBF7D0',
+    marginLeft: 'auto',
   },
   todayPillText: {
     fontSize: 10,
@@ -1103,6 +983,335 @@ const styles = StyleSheet.create({
     color: '#16A34A',
   },
 
+  /* Dedicated Worker Profile Banner (When locked to single worker) */
+  workerLockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  workerLockedAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  workerLockedInitials: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  workerLockedInfo: {
+    flex: 1,
+    gap: 5,
+  },
+  workerLockedNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  workerLockedName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+    flex: 1,
+  },
+  workerLockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  workerLockedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  workerLockedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  workerSkillPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  workerSkillPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  workerRatePill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  workerRatePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  workerOtRatePill: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  workerOtRatePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+
+  /* Full Width Selectors */
+  fullWidthSelectorBtn: {
+    width: '100%',
+  },
+
+  /* Segmented 3-Option Attendance Status */
+  statusSegmentedRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statusCardBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  statusCardActivePresent: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#16A34A',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  statusCardActiveHalf: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#D97706',
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  statusCardActiveAbsent: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#DC2626',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  statusCardInactive: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  statusCardIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  statusCardIconBoxPresent: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusCardIconBoxHalf: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusCardIconBoxAbsent: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  statusCardTitlePresent: {
+    color: '#15803D',
+  },
+  statusCardTitleHalf: {
+    color: '#B45309',
+  },
+  statusCardTitleAbsent: {
+    color: '#B91C1C',
+  },
+  statusCardSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  statusCardSubPresent: {
+    color: '#16A34A',
+  },
+  statusCardSubHalf: {
+    color: '#D97706',
+  },
+  statusCardSubAbsent: {
+    color: '#DC2626',
+  },
+  statusCardWage: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  statusCardWagePresent: {
+    color: '#15803D',
+  },
+  statusCardWageHalf: {
+    color: '#B45309',
+  },
+  statusCardWageAbsent: {
+    color: '#B91C1C',
+  },
+
+  /* Overtime (OT) Controls */
+  otDisabledRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  otDisabledText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  otControlContainer: {
+    gap: 10,
+  },
+  otClockBtnClean: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  otClockBtnCleanActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+  },
+  otClockIconBadgeClean: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otClockIconBadgeCleanActive: {
+    backgroundColor: '#DBEAFE',
+  },
+  otClockMainText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  otClockMainTextActive: {
+    color: '#1D4ED8',
+  },
+  otClockSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  otClockActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  otClockActionChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2563EB',
+  },
+  otQuickPresetsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  otQuickPresetsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginRight: 2,
+  },
+  otQuickChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  otQuickChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+  },
+  otQuickChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  otQuickChipTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '800',
+  },
 
   /* Combined Dual Dropdown Card */
   dualDropdownRow: {
@@ -1148,6 +1357,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CBD5E1',
     minHeight: 48,
+  },
+  dropdownSelectorBtnLocked: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  lockedWorkerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dropdownIconBoxSite: {
     width: 28,

@@ -16,6 +16,7 @@ interface CalendarPickerModalProps {
   title?: string;
   selectedDate?: string; // YYYY-MM-DD format
   minDate?: string; // YYYY-MM-DD format
+  maxDate?: string; // YYYY-MM-DD format
   allowClear?: boolean;
   onSelect: (dateStr: string) => void;
   onClose: () => void;
@@ -62,6 +63,7 @@ export function CalendarPickerModal({
   title = 'Select Date',
   selectedDate = '',
   minDate = '',
+  maxDate = '',
   allowClear = false,
   onSelect,
   onClose,
@@ -128,7 +130,7 @@ export function CalendarPickerModal({
     // Days of current month
     for (let d = 1; d <= daysInMonth; d++) {
       const iso = formatToISO(currentYear, currentMonth, d);
-      const isDisabled = !!minDate && iso < minDate;
+      const isDisabled = (!!minDate && iso < minDate) || (!!maxDate && iso > maxDate);
       const isToday = iso === todayIso;
       const isSelected = iso === activeDate;
 
@@ -142,7 +144,7 @@ export function CalendarPickerModal({
     }
 
     return cells;
-  }, [currentYear, currentMonth, minDate, todayIso, activeDate]);
+  }, [currentYear, currentMonth, minDate, maxDate, todayIso, activeDate]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -173,6 +175,7 @@ export function CalendarPickerModal({
     base.setDate(base.getDate() + daysToAdd);
     const iso = base.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     if (minDate && iso < minDate) return;
+    if (maxDate && iso > maxDate) return;
     setActiveDate(iso);
     setCurrentYear(base.getFullYear());
     setCurrentMonth(base.getMonth());
@@ -183,12 +186,14 @@ export function CalendarPickerModal({
     base.setMonth(base.getMonth() + monthsToAdd);
     const iso = base.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     if (minDate && iso < minDate) return;
+    if (maxDate && iso > maxDate) return;
     setActiveDate(iso);
     setCurrentYear(base.getFullYear());
     setCurrentMonth(base.getMonth());
   };
 
   const handleConfirm = () => {
+    if (maxDate && activeDate > maxDate) return;
     onSelect(activeDate);
     onClose();
   };

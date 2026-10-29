@@ -588,16 +588,25 @@ export function ProfilePage({
                   disabled={saving}
                   style={({ pressed }) => [
                     styles.primarySaveBtn,
-                    saving && { opacity: 0.6 },
-                    pressed && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+                    isDesktop && styles.primarySaveBtnDesktop,
+                    saving && { opacity: 0.65 },
+                    pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
                   ]}
                 >
                   {saving ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={styles.primarySaveBtnText}>
+                        {lang === 'hi' ? 'सुरक्षित हो रहा है...' : 'Saving Profile...'}
+                      </Text>
+                    </>
                   ) : (
-                    <Text style={styles.primarySaveBtnText}>
-                      {t('saveBusinessProfile', 'Save Business Profile')}
-                    </Text>
+                    <>
+                      <AppIcon name="checkmark-circle" size={20} color="#FFFFFF" />
+                      <Text style={styles.primarySaveBtnText}>
+                        {t('saveBusinessProfile', 'Save Business Profile')}
+                      </Text>
+                    </>
                   )}
                 </Pressable>
               </View>
@@ -618,7 +627,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F6F9',
   },
   scrollContent: {
-    paddingBottom: 60,
+    paddingBottom: 90,
   },
   container: {
     width: '100%',
@@ -983,32 +992,37 @@ const styles = StyleSheet.create({
 
   /* Primary Save Button */
   primarySaveBtnWrap: {
+    width: '100%',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 14,
+    marginBottom: 8,
   },
   primarySaveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    backgroundColor: '#2563EB',
-    paddingVertical: 9,
-    paddingHorizontal: 22,
-    borderRadius: 10,
+    gap: 9,
+    backgroundColor: '#1E40AF',
+    width: '100%',
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  primarySaveBtnDesktop: {
+    maxWidth: 420,
     alignSelf: 'center',
-    minWidth: 190,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
   },
   primarySaveBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.1,
+    letterSpacing: 0.2,
   },
 });
 

@@ -184,7 +184,7 @@ export async function printWorkerMonthlySlipPdf(
 
     const att = workerMonthAtt.find((a) => String(a.date).slice(0, 10) === dStr);
 
-    let status: 'P' | 'HD' | 'A' | 'W' | 'UNMARKED' = isSunday ? 'W' : 'UNMARKED';
+    let status: 'P' | 'HD' | 'A' | 'W' | 'UNMARKED' = 'UNMARKED';
     let inTime = '-';
     let outTime = '-';
     let shiftHours = 0;
@@ -270,10 +270,10 @@ export async function printWorkerMonthlySlipPdf(
     ` : '-';
 
     return `
-      <tr class="${r.isSunday ? 'z-sunday-row' : ''}">
+      <tr>
         <td class="center text-muted">${r.day}</td>
         <td class="text-bold">${r.formattedDate}</td>
-        <td class="center ${r.isSunday ? 'text-danger' : 'text-muted'}">${r.dayName}</td>
+        <td class="center text-muted">${r.dayName}</td>
         <td class="center">${statusBadge}</td>
         <td class="center">${shiftDisplay}</td>
         <td class="center">${hoursDisplay}</td>
