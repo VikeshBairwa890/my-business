@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/api/index.mjs"
+      "destination": "/api/index.js"
     }
   ],
   "functions": {
-    "api/index.mjs": {
+    "api/index.js": {
       "includeFiles": "src/**"
     }
   }

@@ -2,16 +2,12 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/test",
-      "destination": "/api/test.mjs"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/api/index.mjs"
+      "destination": "/api/index.js"
     }
   ],
   "functions": {
-    "api/*.mjs": {
+    "api/index.js": {
       "includeFiles": "apps/api/**"
     }
   }
