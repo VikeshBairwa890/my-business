@@ -1,18 +1,5 @@
-let appInstance = null;
+import { createApp } from '../apps/api/src/app.mjs';
 
-export default async function handler(req, res) {
-  try {
-    if (!appInstance) {
-      const { createApp } = await import('../apps/api/src/app.mjs');
-      appInstance = createApp();
-    }
-    return appInstance(req, res);
-  } catch (err) {
-    console.error('Handler error:', err);
-    res.status(500).json({
-      error: 'API Handler Failed',
-      message: err?.message || String(err),
-      stack: err?.stack,
-    });
-  }
-}
+const app = createApp();
+
+export default app;
