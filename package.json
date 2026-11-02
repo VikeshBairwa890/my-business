@@ -1,7 +1,6 @@
 {
   "name": "thekabook",
   "private": true,
-  "type": "module",
   "version": "0.1.0",
   "workspaces": [
     "apps/api",
@@ -25,18 +24,9 @@
     "react-native": "0.86.3"
   },
   "dependencies": {
-    "@prisma/client": "^6.4.1",
-    "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.0.0",
-    "helmet": "^8.1.0",
-    "pdfkit": "^0.20.2",
-    "pg": "^8.16.0",
-    "prisma": "^6.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native": "0.86.3",
-    "zod": "^4.0.0"
+    "react-native": "0.86.3"
   },
   "devDependencies": {
     "@sparticuz/chromium": "^153.0.0",
