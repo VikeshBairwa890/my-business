@@ -2,12 +2,16 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/api/ping",
+      "destination": "/api/ping.js"
+    },
+    {
       "source": "/(.*)",
       "destination": "/api/index.js"
     }
   ],
   "functions": {
-    "api/index.js": {
+    "api/**": {
       "includeFiles": "apps/api/**"
     }
   }

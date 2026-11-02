@@ -1,21 +1,18 @@
-let app;
-let initError = null;
-
-try {
-  const { createApp } = await import('../apps/api/src/app.mjs');
-  app = createApp();
-} catch (err) {
-  initError = err;
-  console.error('Initialization error in api/index.js:', err);
-}
+let appInstance = null;
 
 export default async function handler(req, res) {
-  if (initError) {
-    return res.status(500).json({
-      error: 'API Initialization Failed',
-      message: initError?.message || String(initError),
-      stack: initError?.stack,
+  try {
+    if (!appInstance) {
+      const { createApp } = await import('../apps/api/src/app.mjs');
+      appInstance = createApp();
+    }
+    return appInstance(req, res);
+  } catch (err) {
+    console.error('Handler error:', err);
+    res.status(500).json({
+      error: 'API Handler Failed',
+      message: err?.message || String(err),
+      stack: err?.stack,
     });
   }
-  return app(req, res);
 }
