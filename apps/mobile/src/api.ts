@@ -101,7 +101,7 @@ export function getApiBaseUrl(): string {
   }
 
   // 6. Platform default fallback: Android emulator uses 10.0.2.2 to access host machine
-  return Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+  return Platform.OS === 'android' ? 'https://my-business-hy2b.vercel.app' : 'http://localhost:4000';
 }
 
 export function getPublicReportBaseUrl(): string {

@@ -27,6 +27,7 @@
       "expo-status-bar"
     ],
     "extra": {
+      "apiUrl": "https://my-business-hy2b.vercel.app",
       "description": "Sites, people and every rupee. Contractor work ledger.",
       "eas": {
         "projectId": "8ebc7230-c728-46e1-b81f-9c8361224f9a"
