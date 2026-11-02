@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/common/Card';
 import { EmptyState } from '../../components/common/EmptyState';
 import { TopNavBar } from '../../components/common/TopNavBar';
@@ -25,6 +26,7 @@ export interface DailyHaziriPageProps {
   data: Snapshot;
   onOpenAttendanceModal: (siteId?: string, workerId?: string, existing?: Row) => void;
   onOpenProfile?: () => void;
+  onOpenVoiceModal?: () => void;
   onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
@@ -64,6 +66,7 @@ export function DailyHaziriPage({
   data,
   onOpenAttendanceModal,
   onOpenProfile,
+  onOpenVoiceModal,
   onBack,
   refreshing,
   onRefresh,
@@ -208,6 +211,37 @@ export function DailyHaziriPage({
         }
       >
         <View style={styles.container}>
+                    {/* 0. PROMINENT VOICE HAZIRI BANNER */}
+          {onOpenVoiceModal && (
+            <Pressable
+              onPress={onOpenVoiceModal}
+              style={({ pressed }) => [
+                styles.voiceHaziriBanner,
+                pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Bol kar Haziri lagayein"
+            >
+              <View style={styles.voiceBannerLeft}>
+                <View style={styles.voiceBannerIconCircle}>
+                  <Ionicons name="mic" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.voiceBannerTitle}>Bol Kar Haziri Lagayein</Text>
+                    <View style={styles.voiceBannerBadge}>
+                      <Text style={styles.voiceBannerBadgeText}>VOICE AI</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.voiceBannerSub}>
+                    "रमेश हाजिरी" ya "सोनू हाफ डे" बोलकर तुरंत दर्ज करें
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#2563EB" />
+            </Pressable>
+          )}
+
           {/* 1. DATE NAVIGATION & FILTER STRIP */}
           <View style={styles.dateNavigatorCard}>
             <Pressable
@@ -1087,5 +1121,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#2563EB',
+  },
+  voiceHaziriBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    marginBottom: 12,
+    ...Platform.select({
+      web: { cursor: 'pointer', boxShadow: '0 2px 8px rgba(37, 99, 235, 0.08)' } as any,
+      default: { elevation: 2 },
+    }),
+  },
+  voiceBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  voiceBannerIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  voiceBannerBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  voiceBannerBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  voiceBannerSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#475569',
+    marginTop: 2,
   },
 });

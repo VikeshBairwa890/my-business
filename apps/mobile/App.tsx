@@ -21,6 +21,9 @@ import { SiteFormModal } from './src/components/sites/SiteFormModal';
 import { AttendanceModal } from './src/components/attendance/AttendanceModal';
 import { WorkerFormModal } from './src/components/workers/WorkerFormModal';
 import { VoidEntryModal } from './src/components/common/VoidEntryModal';
+import { VoiceInputModal } from './src/components/common/VoiceInputModal';
+import { ServerConfigModal } from './src/components/common/ServerConfigModal';
+import { FloatingVoiceButton } from './src/components/common/FloatingVoiceButton';
 
 // Pages
 import { AuthPage } from './src/pages/Auth';
@@ -146,6 +149,8 @@ function MainApp() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [showFabModal, setShowFabModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showServerConfig, setShowServerConfig] = useState(false);
   const pendingRef = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -228,6 +233,26 @@ function MainApp() {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.history.pushState(null, '', '/');
       }
+    }
+  }
+
+  
+  async function handleSaveVoiceEntry(action: 'attendance.save' | 'entry.create', payload: any) {
+    setBusy(true);
+    try {
+      const key = commandKey();
+      await request('/commands', token, {
+        action,
+        data: payload,
+        key,
+      });
+      await refresh();
+      return true;
+    } catch (err: any) {
+      showToast(err.message || 'Error saving voice entry', 'e');
+      return false;
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1006,6 +1031,11 @@ function MainApp() {
           )}
         </View>
 
+                {/* Floating Voice Assistant Button */}
+        {!activeEntryKind && !isNewSite && !showFabModal && (
+          <FloatingVoiceButton onPress={() => setShowVoiceModal(true)} />
+        )}
+
         {/* Footer Bottom Navigation with Center Golden Action FAB */}
         {!activeEntryKind && !isNewSite && (
           <BottomNav
@@ -1024,6 +1054,31 @@ function MainApp() {
               <View style={styles.fabSheetHandle} />
               <Text style={styles.fabSheetTitle}>Record Quick Entry</Text>
               <Text style={styles.fabSheetSub}>Choose an action to record for your sites</Text>
+
+                            {/* Voice Action Banner inside FAB */}
+              <Pressable
+                style={styles.fabVoiceBanner}
+                onPress={() => {
+                  setShowFabModal(false);
+                  setShowVoiceModal(true);
+                }}
+              >
+                <View style={styles.fabVoiceIconBox}>
+                  <Ionicons name="mic" size={24} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.fabVoiceTitle}>Bol Kar Entry Karein</Text>
+                    <View style={styles.fabVoiceBadge}>
+                      <Text style={styles.fabVoiceBadgeText}>AI VOICE</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.fabVoiceSub}>
+                    Haziri, labour advance ya kharcha bolkar jodein
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#2563EB" />
+              </Pressable>
 
               <View style={styles.fabGrid}>
                 <Pressable
@@ -1115,6 +1170,25 @@ function MainApp() {
               </Pressable>
             </View>
           </View>
+        ) : null}
+
+                {/* Server Config Modal */}
+        <ServerConfigModal
+          visible={showServerConfig}
+          onClose={() => setShowServerConfig(false)}
+          onSaved={() => refresh()}
+        />
+
+        {/* Voice Input Assistant Modal */}
+        {data ? (
+          <VoiceInputModal
+            visible={showVoiceModal}
+            onClose={() => setShowVoiceModal(false)}
+            data={data}
+            initialSiteId={selectedSiteId || undefined}
+            onSaveVoiceEntry={handleSaveVoiceEntry}
+            onShowToast={(msg, type) => showToast(msg, type as any)}
+          />
         ) : null}
 
         {/* Form Modal */}
@@ -1369,5 +1443,46 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
   },
+  fabVoiceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    marginBottom: 16,
+  },
+  fabVoiceIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabVoiceTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  fabVoiceBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  fabVoiceBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  fabVoiceSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#475569',
+    marginTop: 2,
+  },
 });
-

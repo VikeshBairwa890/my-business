@@ -17,6 +17,8 @@ import { AppIcon } from '../../components/icons/AppIcon';
 import { request, saveRememberedEmail, UserInfo } from '../../api';
 import { RedirectingScreen } from '../../components/common/RedirectingScreen';
 import { Colors } from '../../theme/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { ServerConfigModal } from '../../components/common/ServerConfigModal';
 
 interface LoginPageProps {
   onLogin: (token: string, user?: UserInfo) => Promise<void>;
@@ -36,6 +38,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showServerModal, setShowServerModal] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 

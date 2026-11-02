@@ -11,7 +11,9 @@
     "mobile": "npm run start -w apps/mobile",
     "web": "npm run web -w apps/mobile",
     "test": "node --test apps/api/test/*.test.mjs",
-    "typecheck": "npm run typecheck -w apps/mobile"
+    "typecheck": "npm run typecheck -w apps/mobile",
+    "build": "npm run generate -w apps/api",
+    "vercel-build": "npm run generate -w apps/api"
   },
   "engines": {
     "node": ">=22.13.0"

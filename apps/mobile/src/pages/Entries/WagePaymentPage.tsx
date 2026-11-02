@@ -404,7 +404,7 @@ export function WagePaymentPage({
                       keyboardType="numeric"
                       placeholderTextColor="#94A3B8"
                       style={[styles.textInput, { fontSize: 20, fontWeight: '800', color: '#2563EB' }]}
-                    />          />
+                    />
 
                     {/* Quick Amount Suggestion Chips */}
                     <View style={styles.quickChipsRow}>

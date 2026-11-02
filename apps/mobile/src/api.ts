@@ -4,8 +4,46 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 
 const TOKEN_KEY = 'thekabook_session';
+const CUSTOM_API_URL_KEY = 'thekabook_custom_api_url';
+let activeCustomApiUrl: string | null = null;
+
+// Initialize custom URL synchronously on Web / async on Native
+if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+  activeCustomApiUrl = localStorage.getItem(CUSTOM_API_URL_KEY);
+} else {
+  SecureStore.getItemAsync(CUSTOM_API_URL_KEY).then((val) => {
+    if (val) activeCustomApiUrl = val;
+  }).catch(() => {});
+}
+
+export async function setCustomApiUrl(url: string | null): Promise<void> {
+  activeCustomApiUrl = url ? url.trim().replace(/\/$/, '') : null;
+  if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    if (activeCustomApiUrl) {
+      localStorage.setItem(CUSTOM_API_URL_KEY, activeCustomApiUrl);
+    } else {
+      localStorage.removeItem(CUSTOM_API_URL_KEY);
+    }
+  } else {
+    if (activeCustomApiUrl) {
+      await SecureStore.setItemAsync(CUSTOM_API_URL_KEY, activeCustomApiUrl);
+    } else {
+      await SecureStore.deleteItemAsync(CUSTOM_API_URL_KEY);
+    }
+  }
+}
+
+export function getCustomApiUrl(): string | null {
+  return activeCustomApiUrl;
+}
+
 
 export function getApiBaseUrl(): string {
+  // 0. Active User-configured Custom URL (highest priority for failover & network flexibility)
+  if (activeCustomApiUrl) {
+    return activeCustomApiUrl;
+  }
+
   // 1. Web browser running locally (localhost or local LAN IP):
   // Always connect directly to port 4000 to avoid tunnel latency and 408 timeouts
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {

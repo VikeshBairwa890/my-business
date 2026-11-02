@@ -31,6 +31,7 @@ export interface AttendancePageProps {
   data: Snapshot;
   onOpenAttendanceModal: (siteId?: string, workerId?: string, existing?: Row) => void;
   onOpenProfile?: () => void;
+  onOpenVoiceModal?: () => void;
   onBack?: () => void;
   defaultView?: 'MENU' | 'DAILY' | 'MONTHLY' | 'BULK';
   refreshing: boolean;
@@ -41,6 +42,7 @@ export function AttendancePage({
   data,
   onOpenAttendanceModal,
   onOpenProfile,
+  onOpenVoiceModal,
   onBack,
   defaultView = 'MENU',
   refreshing,
@@ -69,6 +71,7 @@ export function AttendancePage({
         data={data}
         onOpenAttendanceModal={onOpenAttendanceModal}
         onOpenProfile={onOpenProfile}
+        onOpenVoiceModal={onOpenVoiceModal}
         onBack={() => setSubpage('MENU')}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -92,6 +95,14 @@ export function AttendancePage({
   // ATTENDANCE SELECTION SCREEN (Exact same options design as user screenshot)
   // =========================================================================
   const menuOptions = [
+    {
+      id: 'voice',
+      title: 'Bol Kar Haziri (Voice Entry)',
+      icon: 'mic',
+      iconColor: '#2563EB',
+      badge: 'VOICE AI',
+      onPress: () => onOpenVoiceModal?.(),
+    },
     {
       id: 'bulk',
       title: 'Bulk Attendance',
@@ -147,16 +158,35 @@ export function AttendancePage({
               onPress={item.onPress}
               style={({ pressed }) => [
                 styles.menuCard,
+                item.id === 'voice' && styles.menuCardVoice,
                 pressed && styles.menuCardPressed,
               ]}
               accessibilityRole="button"
               accessibilityLabel={item.title}
             >
               <View style={styles.cardLeftContent}>
-                <View style={styles.iconWrap}>
-                  <AppIcon name={item.icon as any} size={22} color={item.iconColor} />
+                <View style={[styles.iconWrap, item.id === 'voice' && styles.iconWrapVoice]}>
+                  <AppIcon
+                    name={item.icon as any}
+                    size={22}
+                    color={item.id === 'voice' ? '#FFFFFF' : item.iconColor}
+                  />
                 </View>
-                <Text style={styles.cardTitleText}>{item.title}</Text>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.cardTitleText}>{item.title}</Text>
+                    {item.badge && (
+                      <View style={styles.badgeVoice}>
+                        <Text style={styles.badgeVoiceText}>{item.badge}</Text>
+                      </View>
+                    )}
+                  </View>
+                  {item.id === 'voice' && (
+                    <Text style={styles.voiceSubText}>
+                      "रमेश हाजिरी" ya "सोनू हाफ डे" बोलकर तुरंत दर्ज करें
+                    </Text>
+                  )}
+                </View>
               </View>
 
               <AppIcon name="chevron-forward" size={18} color="#94A3B8" />
@@ -207,6 +237,10 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  menuCardVoice: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+  },
   menuCardPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.99 }],
@@ -216,16 +250,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+    flex: 1,
   },
   iconWrap: {
-    width: 32,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  iconWrapVoice: {
+    backgroundColor: '#2563EB',
   },
   cardTitleText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.2,
+  },
+  badgeVoice: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeVoiceText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  voiceSubText: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
   },
 });

@@ -9,7 +9,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://consequently-autumn-why-containing.trycloudflare.com"
+        "EXPO_PUBLIC_API_URL": "https://my-business-hy2b.vercel.app"
       }
     },
     "production": {

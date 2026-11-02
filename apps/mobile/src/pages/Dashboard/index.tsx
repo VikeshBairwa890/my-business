@@ -15,6 +15,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { Snapshot, Row } from '../../types';
 import { money, siteSummary } from '../../finance';
@@ -1619,5 +1620,58 @@ const styles = StyleSheet.create({
   itemPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.98 }],
+  },
+  voiceDashboardBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    marginTop: 4,
+    marginBottom: 4,
+    ...Platform.select({
+      web: { cursor: 'pointer', boxShadow: '0 2px 10px rgba(37, 99, 235, 0.08)' } as any,
+      default: { elevation: 2 },
+    }),
+  },
+  voiceBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  voiceDashboardIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceDashboardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  voiceNewBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  voiceNewBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  voiceDashboardSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+    marginTop: 2,
   },
 });
