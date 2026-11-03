@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env src/start.mjs",
     "start": "node --env-file-if-exists=.env src/start.mjs",
+    "postinstall": "prisma generate",
     "build": "prisma generate",
     "vercel-build": "prisma generate",
     "migrate": "prisma db push",
@@ -20,10 +21,10 @@
     "helmet": "^8.1.0",
     "pdfkit": "^0.20.2",
     "pg": "^8.16.0",
+    "prisma": "^6.4.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.14",
-    "prisma": "^6.4.1"
+    "@electric-sql/pglite": "^0.3.14"
   }
 }
