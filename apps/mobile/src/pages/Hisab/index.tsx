@@ -27,7 +27,6 @@ interface HisabPageProps {
   onOpenEntry: (kind: string, siteId?: string, workerId?: string, bill?: Row) => void;
   onOpenVoidModal: (entry: Row) => void;
   onOpenProfile?: () => void;
-  onOpenVoiceModal?: () => void;
   onBack?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
@@ -38,7 +37,6 @@ export function HisabPage({
   onOpenEntry,
   onOpenVoidModal,
   onOpenProfile,
-  onOpenVoiceModal,
   onBack,
   refreshing,
   onRefresh,
@@ -172,36 +170,7 @@ export function HisabPage({
         }
       >
         <View style={styles.container}>
-                    {/* 0. PROMINENT VOICE EXPENSE BANNER */}
-          {onOpenVoiceModal && (
-            <Pressable
-              onPress={onOpenVoiceModal}
-              style={({ pressed }) => [
-                styles.voiceExpenseBanner,
-                pressed && { opacity: 0.88, transform: [{ scale: 0.99 }] },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Bol kar Kharcha ya Payment jodein"
-            >
-              <View style={styles.voiceBannerLeft}>
-                <View style={styles.voiceBannerIconCircle}>
-                  <Ionicons name="mic" size={20} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.voiceBannerTitle}>Bol Kar Kharcha / Advance Jodein</Text>
-                    <View style={styles.voiceBannerBadge}>
-                      <Text style={styles.voiceBannerBadgeText}>VOICE AI</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.voiceBannerSub}>
-                    "रमेश को 500 एडवांस" ya "150 चाय खर्चा" बोलकर तुरंत दर्ज करें
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#059669" />
-            </Pressable>
-          )}
+                    
 
           {/* 1. FINANCIAL SUMMARY OVERVIEW STRIP */}
           <View style={styles.statsSummaryGrid}>
@@ -1150,57 +1119,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#DC2626',
-  },
-  voiceExpenseBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#A7F3D0',
-    marginBottom: 12,
-    ...Platform.select({
-      web: { cursor: 'pointer', boxShadow: '0 2px 8px rgba(5, 150, 105, 0.08)' } as any,
-      default: { elevation: 2 },
-    }),
-  },
-  voiceBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  voiceBannerIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#059669',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceBannerTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  voiceBannerBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  voiceBannerBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  voiceBannerSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#475569',
-    marginTop: 2,
   },
 });

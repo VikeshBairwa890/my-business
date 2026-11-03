@@ -11,6 +11,9 @@ export function createApp(db = null, options = {}) {
   const app = express();
   const testing = Boolean(options.testing);
 
+  // Trust reverse proxy (Vercel)
+  app.set('trust proxy', 1);
+
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginOpenerPolicy: { policy: 'unsafe-none' },
@@ -21,7 +24,7 @@ export function createApp(db = null, options = {}) {
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   if (!testing) {
-    app.use(rateLimit({ windowMs: 60000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false }));
+    app.use(rateLimit({ windowMs: 60000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false, validate: { xForwardedForHeader: false, forwardedHeader: false } }));
   }
 
   // Health Check
