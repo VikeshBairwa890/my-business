@@ -1,14 +1,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const uploadsDir = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Use /tmp/uploads on serverless (Vercel / AWS Lambda) or local ./uploads
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadsDir = isServerless
+  ? path.join(os.tmpdir(), 'uploads')
+  : path.resolve(process.cwd(), 'uploads');
+
+function ensureUploadsDir() {
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('Could not create uploads directory:', err.message);
+  }
 }
 
 export class DocumentService {
   static saveDocument(orgId, { id: docId, name, mimeType, dataUrl }) {
     if (!docId || !dataUrl) throw new Error('Missing document id or dataUrl');
+
+    ensureUploadsDir();
 
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     const base64Content = match ? match[2] : dataUrl;
@@ -31,6 +45,8 @@ export class DocumentService {
   }
 
   static getDocument(rawId) {
+    ensureUploadsDir();
+
     const decodedId = decodeURIComponent(rawId);
     let filePath = path.join(uploadsDir, `${rawId}.bin`);
     let metaPath = path.join(uploadsDir, `${rawId}.json`);
