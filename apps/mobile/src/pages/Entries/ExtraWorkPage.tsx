@@ -9,18 +9,16 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Image,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
 import { Card } from '../../components/common/Card';
-import { EmptyState } from '../../components/common/EmptyState';
 import { TopNavBar } from '../../components/common/TopNavBar';
 import { CalendarPickerModal } from '../../components/common/CalendarPickerModal';
 import { BillImageViewerModal } from '../../components/bills/BillImageViewerModal';
 import { BillAttachmentPicker } from '../../components/bills/BillAttachmentPicker';
-import { getDocFromIndexedDB, fetchDocFromServer, saveDocToIndexedDB, uploadDocToServer } from '../../storage/docStorage';
+import { saveDocToIndexedDB, uploadDocToServer } from '../../storage/docStorage';
 import { Snapshot, Row } from '../../types';
 import { money } from '../../finance';
 import { today } from '../../forms';
@@ -38,23 +36,19 @@ export interface ExtraWorkPageProps {
   siteId?: string;
 }
 
-const EXTRA_CATEGORIES = [
-  { label: 'All', icon: 'apps-outline' },
-  { label: 'Wall & Civil', icon: 'grid-outline' },
-  { label: 'Paint & Texture', icon: 'color-palette-outline' },
-  { label: 'Tiles & Marble', icon: 'layers-outline' },
-  { label: 'Electrical', icon: 'flash-outline' },
-  { label: 'Plumbing', icon: 'water-outline' },
-  { label: 'Ceiling & Molding', icon: 'cube-outline' },
-  { label: 'Waterproofing', icon: 'shield-checkmark-outline' },
-  { label: 'Other Extra', icon: 'construct-outline' },
-];
-
 const APPROVAL_PRESETS = [
   'WhatsApp message confirmation',
   'Client verbal approval on site',
   'Signed drawing / site slip',
   'Phone call confirmation',
+  'Client Email / Letter',
+];
+
+const EXTRA_STATUS_OPTIONS = [
+  { key: 'RECORD', label: 'क्लाइंट से लेना है (Bill Due)', icon: 'document-text' },
+  { key: 'CASH', label: 'नकद प्राप्त (Cash Received)', icon: 'cash' },
+  { key: 'UPI', label: 'UPI / Online Received', icon: 'card' },
+  { key: 'BANK', label: 'बैंक ट्रांसफर (Bank Received)', icon: 'business' },
 ];
 
 export function ExtraWorkPage({
@@ -68,213 +62,120 @@ export function ExtraWorkPage({
   onOpenProfile,
   siteId: initialSiteId,
 }: ExtraWorkPageProps) {
-  const { t, lang } = useLanguage();
+  const { lang } = useLanguage();
 
-  // Filters
-  const [selectedSiteId, setSelectedSiteId] = useState<string>(initialSiteId || 'ALL');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [search, setSearch] = useState('');
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  // Add Form State
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  // Form State
   const [formSiteId, setFormSiteId] = useState<string>(
     initialSiteId || (data.sites[0]?.id ? String(data.sites[0].id) : '')
   );
   const [formDate, setFormDate] = useState(today());
+  const [formParty, setFormParty] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formAmount, setFormAmount] = useState('');
-  const [formParty, setFormParty] = useState('');
-  const [formReference, setFormReference] = useState('WhatsApp message confirmation');
-  const [paymentType, setPaymentType] = useState<'RECORD' | 'PAID'>('RECORD');
-  const [paidMode, setPaidMode] = useState<'CASH' | 'UPI' | 'BANK'>('CASH');
-  const [formDueDate, setFormDueDate] = useState('');
-  const [formDocId, setFormDocId] = useState('');
+  const [formReference, setFormReference] = useState(APPROVAL_PRESETS[0]);
+  const [formMode, setFormMode] = useState('RECORD');
+  const [formMeasurement, setFormMeasurement] = useState('');
   const [formPhotoUrl, setFormPhotoUrl] = useState('');
   const [formPhotoName, setFormPhotoName] = useState('');
-  const [formCalendarTarget, setFormCalendarTarget] = useState<'workDate' | 'dueDate' | null>(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [localError, setLocalError] = useState('');
 
-  // Photo viewer state
-  const [viewingDoc, setViewingDoc] = useState<{
-    url: string;
-    title: string;
-    date: string;
-    amount: number | string;
-    party: string;
-  } | null>(null);
+  // Image Viewer State
+  const [viewingImage, setViewingImage] = useState<{ url: string; title: string } | null>(null);
 
-  const activeEntries = useMemo(
-    () => data.entries.filter((e) => !e.voided_at && e.kind === 'EXTRA'),
-    [data.entries]
+  const selectedSite = useMemo(
+    () => data.sites.find((s) => s.id === formSiteId),
+    [data.sites, formSiteId]
   );
 
-  // Statistics
-  const stats = useMemo(() => {
-    let totalExtra = 0;
-    let thisMonthExtra = 0;
-    const nowMonth = today().slice(0, 7);
-    const siteIds = new Set<string>();
+  // Recent extra work entries
+  const recentExtras = useMemo(() => {
+    return data.entries
+      .filter((e) => !e.voided_at && e.kind === 'EXTRA')
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+      .slice(0, 10);
+  }, [data.entries]);
 
-    for (const e of activeEntries) {
-      const amt = Number(e.amount || 0);
-      totalExtra += amt;
-      const entryMonth = String(e.date || '').slice(0, 7);
-      if (entryMonth === nowMonth) {
-        thisMonthExtra += amt;
-      }
-      if (e.site_id) siteIds.add(String(e.site_id));
-    }
-
-    return {
-      totalExtra,
-      thisMonthExtra,
-      totalJobs: activeEntries.length,
-      sitesCount: siteIds.size,
-    };
-  }, [activeEntries]);
-
-  // Filtered List
-  const filteredEntries = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return activeEntries.filter((e) => {
-      if (selectedSiteId !== 'ALL' && String(e.site_id) !== String(selectedSiteId)) {
-        return false;
-      }
-      if (selectedDate && String(e.date).slice(0, 10) !== selectedDate) {
-        return false;
-      }
-      if (selectedCategory !== 'All') {
-        const desc = (e.description || '').toLowerCase();
-        if (!desc.includes(selectedCategory.toLowerCase())) {
-          return false;
-        }
-      }
-      if (q) {
-        const site = data.sites.find((s) => s.id === e.site_id);
-        const sName = (site?.name || '').toLowerCase();
-        const desc = (e.description || '').toLowerCase();
-        const party = (e.party || '').toLowerCase();
-        const ref = (e.reference || '').toLowerCase();
-        return (
-          sName.includes(q) ||
-          desc.includes(q) ||
-          party.includes(q) ||
-          ref.includes(q)
-        );
-      }
-      return true;
-    }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  }, [activeEntries, selectedSiteId, selectedDate, selectedCategory, search, data.sites]);
-
-  const handleSelectScopePreset = (scope: string) => {
-    if (!formDescription.trim()) {
-      setFormDescription(scope);
-    } else if (!formDescription.toLowerCase().includes(scope.toLowerCase())) {
-      setFormDescription(`${scope} - ${formDescription}`);
-    }
-  };
-
-  const handleOpenPhotoViewer = async (docId: string, item: Row) => {
-    try {
-      const doc = await getDocFromIndexedDB(docId);
-      let url = doc ? doc.dataUrl : '';
-      if (!url) {
-        const res = await fetchDocFromServer(docId);
-        if (res && res.blobUrl) url = res.blobUrl;
-      }
-      if (url) {
-        setViewingDoc({
-          url,
-          title: item.description || 'Extra Work Attachment',
-          date: item.date || '',
-          amount: item.amount || 0,
-          party: item.party || 'Client',
-        });
-      }
-    } catch (err) {
-      console.warn('Failed to load document preview:', err);
-    }
-  };
-
-  const handleSaveForm = async () => {
+  const handleSaveExtra = async () => {
     setLocalError('');
     if (!formSiteId) {
-      setLocalError(lang === 'hi' ? 'कृपया साइट चुनें' : 'Please select a work site');
-      return;
-    }
-    if (!formAmount.trim() || Number(formAmount) <= 0) {
-      setLocalError(lang === 'hi' ? 'कृपया सही राशि दर्ज करें' : 'Please enter a valid amount');
+      setLocalError(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site');
       return;
     }
     if (!formDescription.trim()) {
-      setLocalError(lang === 'hi' ? 'कृपया काम का विवरण लिखें' : 'Please describe the extra work');
+      setLocalError(
+        lang === 'hi'
+          ? 'कृपया अतिरिक्त काम का विवरण भरें'
+          : 'Please enter extra work description'
+      );
+      return;
+    }
+    if (!formAmount || Number(formAmount) <= 0) {
+      setLocalError(
+        lang === 'hi' ? 'कृपया सही अतिरिक्त राशि भरें' : 'Please enter a valid extra amount'
+      );
       return;
     }
 
-    let finalDocId = formDocId;
-    if (formPhotoUrl && !formDocId) {
+    let finalDocId = '';
+    if (formPhotoUrl) {
+      const genId = 'doc_' + Date.now();
       try {
-        finalDocId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         await saveDocToIndexedDB(
-          finalDocId,
-          formPhotoName || 'extra.jpg',
+          genId,
+          formPhotoName || 'extra_work.jpg',
           formPhotoUrl,
           'image/jpeg'
         );
         uploadDocToServer(
-          finalDocId,
-          formPhotoName || 'extra.jpg',
+          genId,
+          formPhotoName || 'extra_work.jpg',
           formPhotoUrl,
           'image/jpeg'
-        ).catch((err) => console.warn('Background upload failed:', err));
-      } catch (err) {
-        console.warn('Failed to store doc locally:', err);
+        ).catch(() => { });
+        finalDocId = genId;
+      } catch (e) {
+        // Continue if local storage fails
       }
     }
 
-    const currentSite = data.sites.find((s) => s.id === formSiteId);
-    const clientParty = formParty.trim() || currentSite?.owner_name || '';
-    const finalMode = paymentType === 'RECORD' ? 'RECORD' : paidMode;
+    const descParts = [formDescription.trim()];
+    if (formMeasurement.trim()) descParts.push(`Measurement: ${formMeasurement.trim()}`);
+    if (formReference) descParts.push(`Approval: ${formReference}`);
 
     onSave({
       site_id: formSiteId,
-      amount: formAmount.trim(),
       date: formDate,
-      description: formDescription.trim(),
-      party: clientParty,
-      mode: finalMode,
-      reference: formReference.trim(),
-      due_date: paymentType === 'RECORD' ? formDueDate : '',
-      quantity: '',
-      unit: '',
-      doc_id: finalDocId,
+      party: formParty.trim() || selectedSite?.owner_name || selectedSite?.name || 'Client',
+      description: descParts.join(' • '),
+      amount: formAmount,
+      mode: formMode,
+      reference: formReference.trim() || finalDocId || 'Client approval',
+      due_date: '',
     });
 
     // Reset Form
-    setIsFormOpen(false);
-    setFormAmount('');
-    setFormDescription('');
     setFormParty('');
-    setFormReference('WhatsApp message confirmation');
-    setPaymentType('RECORD');
-    setFormDueDate('');
-    setFormDocId('');
+    setFormDescription('');
+    setFormAmount('');
+    setFormMeasurement('');
     setFormPhotoUrl('');
     setFormPhotoName('');
   };
 
-  const displayError = localError || error;
-
   return (
     <View style={styles.pageWrapper}>
-      {/* Top Navigation Bar matching AttendancePage */}
+      {/* 1. TOP NAVIGATION BAR */}
       <TopNavBar
-        title={lang === 'hi' ? 'एक्स्ट्रा काम रजिस्टर' : 'Extra Work Register'}
-        subtitle={lang === 'hi' ? 'क्लाइंट चेंज ऑर्डर्स और अतिरिक्त काम' : 'Client Change Orders & Additional Work Ledger'}
-        userInitials={data.user.name}
-        organizationName={data.organization.name}
+        title={lang === 'hi' ? 'एक्स्ट्रा काम (अतिरिक्त कार्य)' : 'Extra Work Register'}
+        subtitle={
+          lang === 'hi'
+            ? 'ठेके के अलावा ग्राहक द्वारा कराया गया अतिरिक्त काम'
+            : 'Contract scope additions, variations & extra client billing'
+        }
+        icon="add-circle"
+        userInitials={data.user?.name}
+        organizationName={data.organization?.name}
         onOpenProfile={onOpenProfile}
         onRefresh={onRefresh}
         refreshing={refreshing}
@@ -295,382 +196,211 @@ export function ExtraWorkPage({
         }
       >
         <View style={styles.container}>
-          {/* ========================================================= */}
-          {/* 1. 4 KPI SUMMARY CARDS (Matching AttendancePage)          */}
-          {/* ========================================================= */}
-          <View style={styles.statsSummaryGrid}>
-            <View style={[styles.statKpiCard, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#DBEAFE' }]}>
-                  <AppIcon name="construct" size={16} color="#2563EB" />
+          {/* 2. DIRECT INLINE EXTRA WORK FORM CARD */}
+          <Card style={styles.inlineFormCard}>
+            <View style={styles.formCardHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.formHeaderIcon}>
+                  <AppIcon name="add-circle" size={20} color="#0284C7" />
                 </View>
-                <Text style={[styles.statKpiLabel, { color: '#1D4ED8' }]}>
-                  {lang === 'hi' ? 'कुल एक्स्ट्रा काम' : 'Total Extra Work'}
-                </Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#2563EB' }]}>
-                {money(stats.totalExtra)}
-              </Text>
-              <Text style={styles.statKpiFoot}>
-                {lang === 'hi' ? 'सभी साइट्स का कुल' : 'All approved change orders'}
-              </Text>
-            </View>
-
-            <View style={[styles.statKpiCard, { borderColor: '#DCFCE7', backgroundColor: '#F0FDF4' }]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                  <AppIcon name="calendar" size={16} color="#16A34A" />
-                </View>
-                <Text style={[styles.statKpiLabel, { color: '#166534' }]}>
-                  {lang === 'hi' ? 'इस महीने का काम' : 'This Month'}
-                </Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#15803D' }]}>
-                {money(stats.thisMonthExtra)}
-              </Text>
-              <Text style={styles.statKpiFoot}>
-                {today().slice(0, 7)}
-              </Text>
-            </View>
-
-            <View style={[styles.statKpiCard, { borderColor: '#FEF3C7', backgroundColor: '#FFFBEB' }]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#FEF3C7' }]}>
-                  <AppIcon name="receipt" size={16} color="#D97706" />
-                </View>
-                <Text style={[styles.statKpiLabel, { color: '#92400E' }]}>
-                  {lang === 'hi' ? 'कुल ऑर्डर्स' : 'Total Orders'}
-                </Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#B45309' }]}>
-                {stats.totalJobs}
-              </Text>
-              <Text style={styles.statKpiFoot}>
-                {lang === 'hi' ? 'रिकॉर्ड किए गए काम' : 'Work items'}
-              </Text>
-            </View>
-
-            <View style={[styles.statKpiCard, { borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#E2E8F0' }]}>
-                  <AppIcon name="business" size={16} color="#475569" />
-                </View>
-                <Text style={[styles.statKpiLabel, { color: '#334155' }]}>
-                  {lang === 'hi' ? 'साइट्स' : 'Active Sites'}
-                </Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#0F172A' }]}>
-                {stats.sitesCount}
-              </Text>
-              <Text style={styles.statKpiFoot}>
-                {lang === 'hi' ? 'साइट्स शामिल हैं' : 'Sites with extra work'}
-              </Text>
-            </View>
-          </View>
-
-          {/* ========================================================= */}
-          {/* 2. PRIMARY ACTION CTA (+ Add Extra Work / Close)         */}
-          {/* ========================================================= */}
-          <View style={styles.actionHeaderBox}>
-            <Pressable
-              onPress={() => setIsFormOpen(!isFormOpen)}
-              style={({ pressed }) => [
-                styles.primaryAddBtn,
-                isFormOpen && styles.primaryAddBtnClose,
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <AppIcon
-                name={isFormOpen ? 'close-circle' : 'add-circle'}
-                size={20}
-                color="#FFFFFF"
-              />
-              <Text style={styles.primaryAddBtnText}>
-                {isFormOpen
-                  ? (lang === 'hi' ? 'फॉर्म बंद करें' : 'Close Form')
-                  : (lang === 'hi' ? '+ नया एक्स्ट्रा काम जोड़ें' : '+ Record New Extra Work')}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* ========================================================= */}
-          {/* 3. INLINE CREATION DRAWER CARD                           */}
-          {/* ========================================================= */}
-          {isFormOpen && (
-            <Card style={styles.formContainerCard}>
-              <View style={styles.formHeaderRow}>
-                <View style={styles.formHeaderTitleWrap}>
-                  <View style={styles.formHeaderIconBadge}>
-                    <AppIcon name="construct" size={18} color="#2563EB" />
-                  </View>
-                  <View>
-                    <Text style={styles.formTitle}>
-                      {lang === 'hi' ? 'नया एक्स्ट्रा काम दर्ज करें' : 'Record New Extra Work'}
-                    </Text>
-                    <Text style={styles.formSubtitle}>
-                      {lang === 'hi' ? 'क्लाइंट की सहमति और चेंज ऑर्डर का विवरण' : 'Client change order agreement details'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {displayError ? (
-                <View style={styles.errorAlert}>
-                  <AppIcon name="alert-circle" size={16} color="#DC2626" />
-                  <Text style={styles.errorAlertText}>{displayError}</Text>
-                </View>
-              ) : null}
-
-              {/* Row 1: Site Picker & Date */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'साइट चुनें *' : 'Select Work Site *'}
+                <View>
+                  <Text style={styles.formTitle}>
+                    {lang === 'hi' ? 'एक्स्ट्रा काम प्रविष्टि' : 'Extra Work Entry'}
                   </Text>
-                  <View style={styles.pickerWrapper}>
-                    <Picker
-                      selectedValue={formSiteId}
-                      onValueChange={(val: any) => setFormSiteId(String(val))}
-                      style={styles.pickerInput}
-                    >
-                      {data.sites.map((s) => (
-                        <Picker.Item key={s.id} label={s.name} value={s.id} />
-                      ))}
-                    </Picker>
-                  </View>
+                  <Text style={styles.formSubtitle}>
+                    {lang === 'hi'
+                      ? 'अतिरिक्त काम, एक्स्ट्रा बिलिंग व अप्रूवल सीधे यहाँ दर्ज करें'
+                      : 'Record extra work scope, client approval & billing'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {localError || error ? (
+              <View style={styles.formErrorBox}>
+                <AppIcon name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.formErrorText}>{localError || error}</Text>
+              </View>
+            ) : null}
+
+            {/* Form Body */}
+            <View style={styles.formBody}>
+              {/* Site Selector */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  {lang === 'hi' ? 'कार्य स्थल (Work Site) *' : 'Work Site *'}
+                </Text>
+                <View style={styles.siteBoxContainer}>
+                  <AppIcon name="business" size={16} color="#0284C7" />
+                  <Text style={styles.siteBoxText} numberOfLines={1}>
+                    {selectedSite
+                      ? `🏢 ${selectedSite.name}`
+                      : (lang === 'hi' ? 'साइट चुनें' : 'Select Work Site')}
+                  </Text>
+                  <AppIcon name="chevron-down" size={14} color="#64748B" />
+                  <Picker
+                    selectedValue={formSiteId}
+                    onValueChange={(val) => setFormSiteId(String(val))}
+                    style={styles.pickerOverlay}
+                    dropdownIconColor="transparent"
+                    prompt={lang === 'hi' ? 'साइट चुनें' : 'Select Work Site'}
+                  >
+                    {data.sites.map((s) => (
+                      <Picker.Item
+                        key={s.id}
+                        label={`🏢 ${s.name}`}
+                        value={s.id}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+
+              {/* Client Name & Work Date Row (50% / 50%) */}
+              <View style={styles.twoColRow}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
+                  <Text style={styles.inputLabel}>
+                    {lang === 'hi' ? 'ग्राहक / अप्रूवर का नाम' : 'Client / Approver Name'}
+                  </Text>
+                  <TextInput
+                    value={formParty}
+                    onChangeText={setFormParty}
+                    placeholder={selectedSite?.owner_name || 'Client Name'}
+                    placeholderTextColor="#94A3B8"
+                    style={styles.textInput}
+                  />
                 </View>
 
-                <View style={styles.formCol}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
                   <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'काम की तारीख *' : 'Work Date *'}
+                    {lang === 'hi' ? 'कार्य दिनांक *' : 'Work Date *'}
                   </Text>
                   <Pressable
-                    onPress={() => setFormCalendarTarget('workDate')}
-                    style={styles.datePickerInput}
+                    onPress={() => setIsCalendarOpen(true)}
+                    style={styles.datePickerBtn}
                   >
-                    <AppIcon name="calendar-outline" size={16} color="#2563EB" />
-                    <Text style={styles.datePickerInputText}>{formDate}</Text>
+                    <Text style={styles.datePickerBtnText}>{formDate}</Text>
+                    <AppIcon name="calendar" size={16} color="#2563EB" />
                   </Pressable>
                 </View>
               </View>
 
-              {/* Quick Scope Presets Chips */}
-              <View style={styles.scopePresetsContainer}>
-                <Text style={styles.miniSectionLabel}>
-                  {lang === 'hi' ? 'त्वरित काम प्रकार (Quick Select)' : 'Quick Scope Suggestions:'}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetScroll}>
-                  {EXTRA_CATEGORIES.filter((c) => c.label !== 'All').map((cat) => (
-                    <Pressable
-                      key={cat.label}
-                      onPress={() => handleSelectScopePreset(cat.label)}
-                      style={styles.presetChip}
-                    >
-                      <AppIcon name={cat.icon as any} size={13} color="#2563EB" />
-                      <Text style={styles.presetChipText}>{cat.label}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Description Input */}
-              <View style={styles.formGroup}>
+              {/* Extra Work Description */}
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>
-                  {lang === 'hi' ? 'काम का विवरण (Work Description) *' : 'Work Description / Scope of Work *'}
+                  {lang === 'hi' ? 'अतिरिक्त काम का पूरा विवरण *' : 'Extra Work Description *'}
                 </Text>
                 <TextInput
                   value={formDescription}
                   onChangeText={setFormDescription}
                   placeholder={
                     lang === 'hi'
-                      ? 'उदा. मास्टर बेडरूम में दीवार तोड़ना, बालकोनी में अतिरिक्त टाइल फिटिंग...'
-                      : 'e.g. Wall demolition in balcony, extra texture painting in hall...'
+                      ? 'जैसे: बाउंड्री वॉल 50ft अतिरिक्त निर्माण, बालकनी टाइल्स कार्य'
+                      : 'e.g. Boundary wall 50ft extra construction, Balcony tile work'
                   }
                   placeholderTextColor="#94A3B8"
-                  style={[styles.textInput, styles.textArea]}
-                  multiline
-                  numberOfLines={3}
+                  style={styles.textInput}
                 />
               </View>
 
-              {/* Row 2: Amount & Party (Client Name) */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
+              {/* Approval Type & Bill Status Row (50% / 50%) */}
+              <View style={styles.twoColRow}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
                   <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'एक्स्ट्रा काम की राशि (₹) *' : 'Extra Work Amount (₹) *'}
+                    {lang === 'hi' ? 'ग्राहक अप्रूवल माध्यम *' : 'Approval Confirmation *'}
                   </Text>
-                  <View style={styles.amountInputWrap}>
-                    <Text style={styles.currencySymbol}>₹</Text>
+                  <View style={styles.siteBoxContainer}>
+                    <AppIcon name="checkmark-circle" size={16} color="#0284C7" />
+                    <Text style={styles.siteBoxText} numberOfLines={1}>
+                      {formReference}
+                    </Text>
+                    <AppIcon name="chevron-down" size={14} color="#64748B" />
+                    <Picker
+                      selectedValue={formReference}
+                      onValueChange={(val) => setFormReference(String(val))}
+                      style={styles.pickerOverlay}
+                      dropdownIconColor="transparent"
+                    >
+                      {APPROVAL_PRESETS.map((app) => (
+                        <Picker.Item key={app} label={app} value={app} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
+                  <Text style={styles.inputLabel}>
+                    {lang === 'hi' ? 'बिल स्थिति / माध्यम *' : 'Billing Status *'}
+                  </Text>
+                  <View style={styles.siteBoxContainer}>
+                    <AppIcon
+                      name={
+                        formMode === 'RECORD'
+                          ? 'document-text'
+                          : formMode === 'CASH'
+                            ? 'cash'
+                            : formMode === 'UPI'
+                              ? 'card'
+                              : 'business'
+                      }
+                      size={16}
+                      color="#0284C7"
+                    />
+                    <Text style={styles.siteBoxText} numberOfLines={1}>
+                      {EXTRA_STATUS_OPTIONS.find((s) => s.key === formMode)?.label || formMode}
+                    </Text>
+                    <AppIcon name="chevron-down" size={14} color="#64748B" />
+                    <Picker
+                      selectedValue={formMode}
+                      onValueChange={(val) => setFormMode(String(val))}
+                      style={styles.pickerOverlay}
+                      dropdownIconColor="transparent"
+                    >
+                      {EXTRA_STATUS_OPTIONS.map((opt) => (
+                        <Picker.Item key={opt.key} label={opt.label} value={opt.key} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+              </View>
+
+              {/* Extra Amount & Measurement Row (50% / 50%) */}
+              <View style={styles.twoColRow}>
+                {/* 1. Extra Amount Card */}
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
+                  <Text style={styles.inputLabel}>
+                    {lang === 'hi' ? 'अतिरिक्त काम की राशि (₹) *' : 'Extra Work Amount (₹) *'}
+                  </Text>
+                  <View style={styles.amountBoxContainer}>
+                    <Text style={[styles.amountCurrencyPrefix, { color: '#0284C7' }]}>₹</Text>
                     <TextInput
                       value={formAmount}
                       onChangeText={setFormAmount}
+                      placeholder="25000"
                       keyboardType="numeric"
-                      placeholder="0.00"
                       placeholderTextColor="#94A3B8"
-                      style={styles.amountInput}
+                      style={[styles.amountInput, { color: '#0284C7' }]}
                     />
                   </View>
                 </View>
 
-                <View style={styles.formCol}>
+                {/* 2. Measurement / Area Notes */}
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
                   <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'क्लाइंट का नाम (Party Name)' : 'Client / Party Name'}
+                    {lang === 'hi' ? 'नाप / क्षेत्रफल (Measurement)' : 'Measurement / Area'}
                   </Text>
                   <TextInput
-                    value={formParty}
-                    onChangeText={setFormParty}
-                    placeholder={
-                      data.sites.find((s) => s.id === formSiteId)?.owner_name ||
-                      (lang === 'hi' ? 'क्लाइंट नाम' : 'Client name')
-                    }
+                    value={formMeasurement}
+                    onChangeText={setFormMeasurement}
+                    placeholder={lang === 'hi' ? 'उदा: 150 Sq Ft @ ₹180' : 'e.g. 150 Sq Ft @ ₹180'}
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
                 </View>
               </View>
 
-              {/* Approval Reference / Agreement */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>
-                  {lang === 'hi' ? 'सहमति संदर्भ (Client Approval Reference) *' : 'Client Approval Reference / Agreement *'}
-                </Text>
-                <TextInput
-                  value={formReference}
-                  onChangeText={setFormReference}
-                  placeholder="e.g. WhatsApp confirmation / Verbal agreement"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.textInput}
-                />
-                <View style={styles.approvalChipsWrap}>
-                  {APPROVAL_PRESETS.map((refPreset) => (
-                    <Pressable
-                      key={refPreset}
-                      onPress={() => setFormReference(refPreset)}
-                      style={[
-                        styles.refChip,
-                        formReference === refPreset && styles.refChipActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.refChipText,
-                          formReference === refPreset && styles.refChipTextActive,
-                        ]}
-                      >
-                        {refPreset}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              {/* Payment Settlement Options */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>
-                  {lang === 'hi' ? 'भुगतान स्थिति (Payment Settlement)' : 'Payment Settlement / Status'}
-                </Text>
-                <View style={styles.paymentTypeRow}>
-                  <Pressable
-                    onPress={() => setPaymentType('RECORD')}
-                    style={[
-                      styles.paymentTypeBtn,
-                      paymentType === 'RECORD' && styles.paymentTypeBtnActive,
-                    ]}
-                  >
-                    <AppIcon
-                      name="receipt-outline"
-                      size={16}
-                      color={paymentType === 'RECORD' ? '#2563EB' : '#64748B'}
-                    />
-                    <Text
-                      style={[
-                        styles.paymentTypeBtnText,
-                        paymentType === 'RECORD' && styles.paymentTypeBtnTextActive,
-                      ]}
-                    >
-                      {lang === 'hi' ? 'बिल में जोड़ें (Pay Later)' : 'Add to Client Bill (Pay Later)'}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => setPaymentType('PAID')}
-                    style={[
-                      styles.paymentTypeBtn,
-                      paymentType === 'PAID' && styles.paymentTypeBtnActive,
-                    ]}
-                  >
-                    <AppIcon
-                      name="checkmark-circle-outline"
-                      size={16}
-                      color={paymentType === 'PAID' ? '#16A34A' : '#64748B'}
-                    />
-                    <Text
-                      style={[
-                        styles.paymentTypeBtnText,
-                        paymentType === 'PAID' && styles.paymentTypeBtnTextActive,
-                      ]}
-                    >
-                      {lang === 'hi' ? 'तुरंत प्राप्त हुआ (Paid on Spot)' : 'Paid on Spot'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* Conditional: Paid Mode or Due Date */}
-              {paymentType === 'PAID' ? (
-                <View style={styles.formGroup}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'भुगतान का माध्यम (Payment Mode)' : 'Payment Mode Received'}
-                  </Text>
-                  <View style={styles.modeChipsRow}>
-                    {(['CASH', 'UPI', 'BANK'] as const).map((m) => (
-                      <Pressable
-                        key={m}
-                        onPress={() => setPaidMode(m)}
-                        style={[
-                          styles.modeChip,
-                          paidMode === m && styles.modeChipActive,
-                        ]}
-                      >
-                        <AppIcon
-                          name={m === 'CASH' ? 'cash-outline' : m === 'UPI' ? 'phone-portrait-outline' : 'business-outline'}
-                          size={15}
-                          color={paidMode === m ? '#FFFFFF' : '#475569'}
-                        />
-                        <Text
-                          style={[
-                            styles.modeChipText,
-                            paidMode === m && styles.modeChipTextActive,
-                          ]}
-                        >
-                          {m}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.formGroup}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'अपेक्षित भुगतान तिथि (Due Date - Optional)' : 'Expected Due Date (Optional)'}
-                  </Text>
-                  <Pressable
-                    onPress={() => setFormCalendarTarget('dueDate')}
-                    style={styles.datePickerInput}
-                  >
-                    <AppIcon name="calendar-outline" size={16} color="#2563EB" />
-                    <Text style={styles.datePickerInputText}>
-                      {formDueDate || (lang === 'hi' ? 'तारीख चुनें (वैकल्पिक)' : 'Select due date (optional)')}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {/* Photo / Slip Attachment */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>
-                  {lang === 'hi' ? 'फोटो या साइट स्लिप (वैकल्पिक)' : 'Photo / Drawing / Slip (Optional)'}
-                </Text>
+              {/* Site Photo / Drawing Attachment */}
+              <View style={styles.inputGroup}>
                 <BillAttachmentPicker
                   photoUrl={formPhotoUrl}
                   photoName={formPhotoName}
@@ -681,292 +411,163 @@ export function ExtraWorkPage({
                   onPhotoRemoved={() => {
                     setFormPhotoUrl('');
                     setFormPhotoName('');
-                    setFormDocId('');
                   }}
                 />
               </View>
 
-              {/* Submit Buttons */}
-              <View style={styles.formActionsRow}>
+              {/* Action Buttons */}
+              <View style={styles.formActionRow}>
                 <Pressable
-                  onPress={() => setIsFormOpen(false)}
-                  style={styles.cancelFormBtn}
+                  onPress={() => {
+                    setFormParty('');
+                    setFormDescription('');
+                    setFormAmount('');
+                    setFormMeasurement('');
+                    setFormPhotoUrl('');
+                    setFormPhotoName('');
+                    setLocalError('');
+                  }}
+                  style={styles.formCancelBtn}
                 >
-                  <Text style={styles.cancelFormBtnText}>
-                    {lang === 'hi' ? 'रद्द करें' : 'Cancel'}
+                  <Text style={styles.formCancelBtnText}>
+                    {lang === 'hi' ? 'साफ़ करें' : 'Clear'}
                   </Text>
                 </Pressable>
 
                 <Pressable
-                  onPress={handleSaveForm}
+                  onPress={handleSaveExtra}
                   disabled={busy}
-                  style={[styles.saveFormBtn, busy && { opacity: 0.7 }]}
+                  style={[styles.formSaveBtn, { backgroundColor: '#0284C7' }, busy && { opacity: 0.6 }]}
                 >
                   {busy ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <>
-                      <AppIcon name="checkmark-circle" size={18} color="#FFFFFF" />
-                      <Text style={styles.saveFormBtnText}>
-                        {lang === 'hi' ? 'एक्स्ट्रा काम सुरक्षित करें' : 'Save Extra Work'}
+                      <AppIcon name="checkmark" size={16} color="#FFFFFF" />
+                      <Text style={styles.formSaveBtnText}>
+                        {formAmount
+                          ? `${lang === 'hi' ? 'एक्स्ट्रा काम जोड़ें' : 'Save'} ${money(Number(formAmount) * 100)}`
+                          : (lang === 'hi' ? 'एक्स्ट्रा काम सुरक्षित करें' : 'Save Extra Work')}
                       </Text>
                     </>
                   )}
                 </Pressable>
               </View>
-            </Card>
-          )}
+            </View>
+          </Card>
 
-          {/* ========================================================= */}
-          {/* 4. SEARCH & FILTER TOOLBAR (Matching AttendancePage)      */}
-          {/* ========================================================= */}
-          <View style={styles.toolbarBox}>
-            <View style={styles.searchRow}>
-              <View style={styles.searchBar}>
-                <AppIcon name="search" size={16} color="#64748B" />
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder={lang === 'hi' ? 'काम, पार्टी या साइट खोजें...' : 'Search scope, client, or site...'}
-                  placeholderTextColor="#94A3B8"
-                  style={styles.searchInput}
-                />
-                {search ? (
-                  <Pressable onPress={() => setSearch('')}>
-                    <AppIcon name="close-circle" size={16} color="#94A3B8" />
-                  </Pressable>
-                ) : null}
+          {/* 3. RECENT EXTRA WORK LIST */}
+          <Card style={styles.recentBillsCard}>
+            <View style={styles.recentHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={[styles.recentHeaderIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <AppIcon name="add-circle" size={16} color="#0284C7" />
+                </View>
+                <View>
+                  <Text style={styles.recentTitle}>
+                    {lang === 'hi' ? 'हाल ही के एक्स्ट्रा काम' : 'Recent Extra Work Records'}
+                  </Text>
+                  <Text style={styles.recentSubtitle}>
+                    {lang === 'hi'
+                      ? 'अंतिम 10 अतिरिक्त कार्य प्रविष्टियाँ'
+                      : 'Last 10 recorded extra work entries'}
+                  </Text>
+                </View>
               </View>
+              <View style={[styles.badgePill, { backgroundColor: '#E0F2FE' }]}>
+                <Text style={[styles.badgePillText, { color: '#0284C7' }]}>{recentExtras.length} Items</Text>
+              </View>
+            </View>
 
-              <Pressable
-                onPress={() => setIsCalendarOpen(true)}
-                style={[
-                  styles.calendarFilterBtn,
-                  selectedDate && styles.calendarFilterBtnActive,
-                ]}
-              >
-                <AppIcon
-                  name="calendar"
-                  size={16}
-                  color={selectedDate ? '#2563EB' : '#475569'}
-                />
-                <Text
-                  style={[
-                    styles.calendarFilterBtnText,
-                    selectedDate && styles.calendarFilterBtnTextActive,
-                  ]}
-                >
-                  {selectedDate ? selectedDate.slice(5) : (lang === 'hi' ? 'तारीख' : 'Date')}
+            {recentExtras.length === 0 ? (
+              <View style={styles.emptyStateBox}>
+                <AppIcon name="add-circle-outline" size={32} color="#CBD5E1" />
+                <Text style={styles.emptyStateTitle}>
+                  {lang === 'hi' ? 'कोई एक्स्ट्रा काम दर्ज नहीं है' : 'No extra work recorded yet'}
                 </Text>
-                {selectedDate && (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setSelectedDate(null);
-                    }}
-                    hitSlop={8}
-                  >
-                    <AppIcon name="close-circle" size={14} color="#2563EB" />
-                  </Pressable>
-                )}
-              </Pressable>
-            </View>
-
-            {/* Site Picker & Categories */}
-            <View style={styles.filterControlsRow}>
-              <View style={styles.siteFilterPickerWrap}>
-                <Picker
-                  selectedValue={selectedSiteId}
-                  onValueChange={(val: any) => setSelectedSiteId(String(val))}
-                  style={styles.sitePickerStyle}
-                >
-                  <Picker.Item label={lang === 'hi' ? '🏢 सभी साइट्स (All Sites)' : '🏢 All Sites'} value="ALL" />
-                  {data.sites.map((s) => (
-                    <Picker.Item key={s.id} label={`📍 ${s.name}`} value={s.id} />
-                  ))}
-                </Picker>
+                <Text style={styles.emptyStateSubtitle}>
+                  {lang === 'hi'
+                    ? 'ऊपर दिए गए फ़ॉर्म से पहला एक्स्ट्रा काम दर्ज करें'
+                    : 'Use the form above to add extra work'}
+                </Text>
               </View>
-            </View>
-
-            {/* Scope Category Filter Chips */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
-              {EXTRA_CATEGORIES.map((cat) => {
-                const isActive = selectedCategory === cat.label;
-                return (
-                  <Pressable
-                    key={cat.label}
-                    onPress={() => setSelectedCategory(cat.label)}
-                    style={[
-                      styles.categoryFilterChip,
-                      isActive && styles.categoryFilterChipActive,
-                    ]}
-                  >
-                    <AppIcon
-                      name={cat.icon as any}
-                      size={14}
-                      color={isActive ? '#FFFFFF' : '#475569'}
-                    />
-                    <Text
-                      style={[
-                        styles.categoryFilterChipText,
-                        isActive && styles.categoryFilterChipTextActive,
-                      ]}
-                    >
-                      {cat.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* ========================================================= */}
-          {/* 5. RECORDS LIST SECTION                                  */}
-          {/* ========================================================= */}
-          <View style={styles.recordsSection}>
-            <View style={styles.recordsSectionHeader}>
-              <Text style={styles.recordsSectionTitle}>
-                {lang === 'hi' ? 'एक्स्ट्रा काम प्रविष्टियाँ' : 'Extra Work Entries'}
-              </Text>
-              <Text style={styles.recordsCountBadge}>
-                {filteredEntries.length} {lang === 'hi' ? 'काम' : 'items'}
-              </Text>
-            </View>
-
-            {filteredEntries.length === 0 ? (
-              <EmptyState
-                icon="construct-outline"
-                title={lang === 'hi' ? 'कोई एक्स्ट्रा काम नहीं मिला' : 'No Extra Work Found'}
-                description={
-                  search || selectedCategory !== 'All' || selectedDate
-                    ? (lang === 'hi' ? 'फिल्टर बदलकर पुनः प्रयास करें' : 'Try adjusting your search or filters')
-                    : (lang === 'hi' ? 'ऊपर दिए गए बटन से नया एक्स्ट्रा काम जोड़ें' : 'Click "+ Record New Extra Work" above to add the first item.')
-                }
-              />
             ) : (
-              filteredEntries.map((item) => {
-                const site = data.sites.find((s) => s.id === item.site_id);
-                const hasAttachment = Boolean(item.doc_id);
-                const isPaid = item.mode && item.mode !== 'RECORD';
+              <View style={styles.billsList}>
+                {recentExtras.map((item) => {
+                  const site = data.sites.find((s) => s.id === item.site_id);
+                  const isDue = item.mode === 'RECORD';
 
-                return (
-                  <Card key={item.id} style={styles.recordCard}>
-                    <View style={styles.recordTopRow}>
-                      <View style={styles.recordSiteBadge}>
-                        <AppIcon name="business-outline" size={13} color="#475569" />
-                        <Text style={styles.recordSiteText} numberOfLines={1}>
-                          {site?.name || 'Site'}
-                        </Text>
+                  return (
+                    <View key={item.id} style={styles.billItemRow}>
+                      <View style={styles.billItemLeft}>
+                        <View style={[styles.billItemIcon, { backgroundColor: '#E0F2FE' }]}>
+                          <AppIcon name="add-circle" size={16} color="#0284C7" />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                          <Text style={styles.billItemDesc} numberOfLines={1}>
+                            {item.description || 'Extra Work Scope'}
+                          </Text>
+                          <View style={styles.billItemMetaRow}>
+                            <Text style={styles.billItemParty} numberOfLines={1}>
+                              🏢 {site?.name || 'Site'} • {item.party || 'Client'}
+                            </Text>
+                            <Text style={styles.billItemDate}>
+                              • {String(item.date).slice(0, 10)}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
 
-                      <View style={styles.recordRightBadges}>
-                        <View style={styles.recordDateBadge}>
-                          <AppIcon name="calendar-outline" size={12} color="#64748B" />
-                          <Text style={styles.recordDateText}>{item.date}</Text>
-                        </View>
+                      <View style={styles.billItemRight}>
+                        <Text style={styles.billItemAmount}>
+                          {money(item.amount)}
+                        </Text>
                         <View
                           style={[
-                            styles.recordStatusBadge,
-                            isPaid ? styles.recordStatusPaid : styles.recordStatusDue,
+                            styles.billModeBadge,
+                            isDue ? styles.billModeBadgeDue : styles.billModeBadgePaid,
                           ]}
                         >
                           <Text
-                            style={isPaid ? styles.recordStatusPaidText : styles.recordStatusDueText}
+                            style={[
+                              styles.billModeBadgeText,
+                              isDue ? styles.billModeTextDue : styles.billModeTextPaid,
+                            ]}
                           >
-                            {isPaid ? `Paid (${item.mode})` : 'Added to Bill'}
+                            {isDue ? (lang === 'hi' ? 'देय' : 'Due') : (item.mode || 'CASH')}
                           </Text>
                         </View>
                       </View>
                     </View>
-
-                    <View style={styles.recordMainRow}>
-                      <View style={styles.recordInfoCol}>
-                        <Text style={styles.recordDescriptionText}>
-                          {item.description || 'Extra Work Scope'}
-                        </Text>
-                        {item.party ? (
-                          <View style={styles.recordPartyRow}>
-                            <AppIcon name="person-outline" size={13} color="#64748B" />
-                            <Text style={styles.recordPartyText}>
-                              {lang === 'hi' ? 'क्लाइंट: ' : 'Client: '}{item.party}
-                            </Text>
-                          </View>
-                        ) : null}
-                        {item.reference ? (
-                          <View style={styles.recordRefRow}>
-                            <AppIcon name="checkmark-done-outline" size={13} color="#2563EB" />
-                            <Text style={styles.recordRefText}>
-                              {item.reference}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-
-                      <View style={styles.recordAmountCol}>
-                        <Text style={styles.recordAmountText}>
-                          {money(item.amount)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Footer with Attachment button */}
-                    {hasAttachment && (
-                      <View style={styles.recordFootRow}>
-                        <Pressable
-                          onPress={() => handleOpenPhotoViewer(String(item.doc_id), item)}
-                          style={styles.attachmentViewBtn}
-                        >
-                          <AppIcon name="image-outline" size={14} color="#2563EB" />
-                          <Text style={styles.attachmentViewBtnText}>
-                            {lang === 'hi' ? 'स्लिप / फोटो देखें' : 'View Attachment'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </Card>
-                );
-              })
+                  );
+                })}
+              </View>
             )}
-          </View>
+          </Card>
         </View>
       </ScrollView>
 
-      {/* Filter Calendar Modal */}
-      <CalendarPickerModal
-        visible={isCalendarOpen}
-        selectedDate={selectedDate || today()}
-        onSelect={(d) => {
-          setSelectedDate(d);
-          setIsCalendarOpen(false);
-        }}
-        onClose={() => setIsCalendarOpen(false)}
-      />
+      {/* Date Picker Modal */}
+      {isCalendarOpen && (
+        <CalendarPickerModal
+          visible={isCalendarOpen}
+          title={lang === 'hi' ? 'कार्य दिनांक चुनें' : 'Select Work Date'}
+          selectedDate={formDate}
+          onSelect={(d) => {
+            if (d) setFormDate(d);
+            setIsCalendarOpen(false);
+          }}
+          onClose={() => setIsCalendarOpen(false)}
+        />
+      )}
 
-      {/* Form Calendar Modal */}
-      <CalendarPickerModal
-        visible={formCalendarTarget !== null}
-        selectedDate={formCalendarTarget === 'dueDate' ? (formDueDate || today()) : formDate}
-        onSelect={(d) => {
-          if (formCalendarTarget === 'workDate') {
-            setFormDate(d);
-          } else if (formCalendarTarget === 'dueDate') {
-            setFormDueDate(d);
-          }
-          setFormCalendarTarget(null);
-        }}
-        onClose={() => setFormCalendarTarget(null)}
-      />
-
-      {/* Document/Photo Fullscreen Viewer */}
-      {viewingDoc && (
+      {/* Image Viewer Modal */}
+      {viewingImage && (
         <BillImageViewerModal
-          visible={true}
-          imageUrl={viewingDoc.url}
-          title={viewingDoc.title}
-          date={viewingDoc.date}
-          amount={viewingDoc.amount}
-          party={viewingDoc.party}
-          onClose={() => setViewingDoc(null)}
+          visible={!!viewingImage}
+          imageUrl={viewingImage.url}
+          title={viewingImage.title}
+          onClose={() => setViewingImage(null)}
         />
       )}
     </View>
@@ -974,640 +575,331 @@ export function ExtraWorkPage({
 }
 
 const styles = StyleSheet.create({
-  pageWrapper: {
-    flex: 1,
+  pageWrapper: { flex: 1, backgroundColor: '#F8FAFC' },
+  root: { flex: 1 },
+  scroll: { paddingBottom: 50 },
+  container: { padding: 16, gap: 14, maxWidth: 960, width: '100%', alignSelf: 'center' },
+
+  siteBoxContainer: {
+    height: 42,
     backgroundColor: '#F8FAFC',
-  },
-  root: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scroll: {
-    paddingBottom: 40,
-  },
-  container: {
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    position: 'relative',
     width: '100%',
-    maxWidth: 960,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    overflow: 'hidden',
   },
-
-  // KPI Summary Grid
-  statsSummaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  statKpiCard: {
+  siteBoxText: {
     flex: 1,
-    minWidth: 150,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
-      default: { elevation: 1 },
-    }),
-  },
-  statKpiTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  statIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statKpiLabel: {
-    fontSize: 12,
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 13,
     fontWeight: '600',
+    color: '#0F172A',
+    marginHorizontal: 6,
   },
-  statKpiValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  statKpiFoot: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-
-  // Action CTA
-  actionHeaderBox: {
-    marginBottom: 16,
-  },
-  primaryAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#2563EB',
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    ...Platform.select({
-      web: { boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)' },
-      default: { elevation: 2 },
-    }),
-  },
-  primaryAddBtnClose: {
-    backgroundColor: '#64748B',
-  },
-  primaryAddBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+  pickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0,
+    width: '100%',
+    height: '100%',
+    maxWidth: '100%',
+    zIndex: 10,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
 
-  // Form Card
-  formContainerCard: {
-    marginBottom: 20,
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+  inlineFormCard: {
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    ...Platform.select({
-      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
-      default: { elevation: 3 },
-    }),
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    gap: 14,
   },
-  formHeaderRow: {
-    marginBottom: 14,
-  },
-  formHeaderTitleWrap: {
+  formCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  formHeaderIconBadge: {
+  formHeaderIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#E0F2FE',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   formTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#0F172A',
   },
   formSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
   },
-  errorAlert: {
+  formErrorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    padding: 10,
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    padding: 8,
     borderRadius: 8,
-    marginBottom: 12,
   },
-  errorAlertText: {
-    color: '#B91C1C',
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
+  formErrorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    fontWeight: '600',
   },
-  formRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  formBody: {
     gap: 12,
-    marginBottom: 12,
   },
-  formCol: {
-    flex: 1,
-    minWidth: 140,
-  },
-  formGroup: {
-    marginBottom: 12,
+  inputGroup: {
+    gap: 4,
   },
   inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
-  },
-  pickerWrapper: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-  },
-  pickerInput: {
-    height: 44,
-  },
-  datePickerInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  datePickerInputText: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '500',
   },
   textInput: {
-    borderWidth: 1,
+    height: 42,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    paddingHorizontal: 10,
+    fontSize: 13,
     color: '#0F172A',
+    width: '100%',
   },
-  textArea: {
-    minHeight: 64,
-    textAlignVertical: 'top',
+  twoColRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
   },
-  amountInputWrap: {
+  datePickerBtn: {
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
+    width: '100%',
   },
-  currencySymbol: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563EB',
-    marginRight: 6,
+  datePickerBtnText: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  amountBoxContainer: {
+    height: 42,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 6,
+    width: '100%',
+  },
+  amountCurrencyPrefix: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0284C7',
   },
   amountInput: {
     flex: 1,
-    height: 44,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    height: 40,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0284C7',
+    padding: 0,
   },
-
-  // Presets & Scope Chips
-  scopePresetsContainer: {
-    marginBottom: 12,
-  },
-  miniSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  presetScroll: {
-    flexDirection: 'row',
-  },
-  presetChip: {
+  formActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  presetChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2563EB',
-  },
-  approvalChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  refChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  refChipActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  refChipText: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  refChipTextActive: {
-    color: '#2563EB',
-    fontWeight: '600',
-  },
-
-  // Payment Settlement
-  paymentTypeRow: {
-    flexDirection: 'row',
     gap: 10,
+    marginTop: 6,
+    width: '100%',
   },
-  paymentTypeBtn: {
+  formCancelBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    minHeight: 46,
+    paddingVertical: 12,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  paymentTypeBtnActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
-  },
-  paymentTypeBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  paymentTypeBtnTextActive: {
-    color: '#1D4ED8',
-    fontWeight: '700',
-  },
-  modeChipsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  modeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-  },
-  modeChipActive: {
-    backgroundColor: '#1E293B',
-    borderColor: '#1E293B',
-  },
-  modeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  modeChipTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // Form Action Buttons
-  formActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  cancelFormBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-  cancelFormBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  saveFormBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#2563EB',
     justifyContent: 'center',
   },
-  saveFormBtnText: {
+  formCancelBtnText: {
     fontSize: 13,
     fontWeight: '700',
+    color: '#64748B',
+  },
+  formSaveBtn: {
+    flex: 1,
+    minHeight: 46,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formSaveBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
 
-  // Toolbar & Filter Styles
-  toolbarBox: {
+  // Recent Extra Work Card
+  recentBillsCard: {
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
-      default: { elevation: 1 },
-    }),
-  },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    height: 40,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-  },
-  calendarFilterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    height: 40,
-  },
-  calendarFilterBtnActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
-  },
-  calendarFilterBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  calendarFilterBtnTextActive: {
-    color: '#2563EB',
-  },
-  filterControlsRow: {
-    marginBottom: 10,
-  },
-  siteFilterPickerWrap: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    overflow: 'hidden',
-  },
-  sitePickerStyle: {
-    height: 40,
-  },
-  categoriesScroll: {
-    flexDirection: 'row',
-  },
-  categoryFilterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    marginRight: 8,
-  },
-  categoryFilterChipActive: {
-    backgroundColor: '#2563EB',
-  },
-  categoryFilterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  categoryFilterChipTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // Records List Styles
-  recordsSection: {
-    marginBottom: 20,
-  },
-  recordsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recordsSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  recordsCountBadge: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  recordCard: {
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.03)' },
-      default: { elevation: 1 },
-    }),
-  },
-  recordTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  recordSiteBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    maxWidth: '50%',
-  },
-  recordSiteText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  recordRightBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  recordDateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  recordDateText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  recordStatusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recordStatusDue: {
-    backgroundColor: '#EFF6FF',
-  },
-  recordStatusDueText: {
-    color: '#2563EB',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  recordStatusPaid: {
-    backgroundColor: '#DCFCE7',
-  },
-  recordStatusPaidText: {
-    color: '#15803D',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  recordMainRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     gap: 12,
   },
-  recordInfoCol: {
-    flex: 1,
+  recentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  recordDescriptionText: {
+  recentHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  recordPartyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  recordPartyText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  recordRefRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  recordRefText: {
-    fontSize: 11,
-    color: '#2563EB',
-    fontWeight: '500',
-  },
-  recordAmountCol: {
-    alignItems: 'flex-end',
-  },
-  recordAmountText: {
-    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  recordFootRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
+  recentSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
   },
-  attachmentViewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  attachmentViewBtnText: {
+  badgePillText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#2563EB',
+    fontWeight: '700',
+  },
+  emptyStateBox: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  emptyStateTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  emptyStateSubtitle: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  billsList: {
+    gap: 10,
+  },
+  billItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  billItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  billItemIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billItemDesc: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  billItemMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  billItemParty: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  billItemDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  billItemRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  billItemAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  billModeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  billModeBadgeDue: {
+    backgroundColor: '#FEF3C7',
+  },
+  billModeBadgePaid: {
+    backgroundColor: '#DCFCE7',
+  },
+  billModeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  billModeTextDue: {
+    color: '#B45309',
+  },
+  billModeTextPaid: {
+    color: '#15803D',
   },
 });

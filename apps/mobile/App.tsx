@@ -249,13 +249,10 @@ function MainApp() {
         entity_id: form.entity_id,
         data: form.transform(values),
       };
-      const signature = JSON.stringify(body);
-      if (pendingRef.current?.signature !== signature) {
-        pendingRef.current = { signature, key: commandKey() };
-      }
+      const requestKey = commandKey();
       await request('/commands', token, {
         ...body,
-        key: pendingRef.current.key,
+        key: requestKey,
       });
       setForm(null);
       pendingRef.current = null;
@@ -612,13 +609,10 @@ function MainApp() {
         entity_id: commandKey(),
         data: spec.transform(values),
       };
-      const signature = JSON.stringify(body);
-      if (pendingRef.current?.signature !== signature) {
-        pendingRef.current = { signature, key: commandKey() };
-      }
+      const requestKey = commandKey();
       await request('/commands', token, {
         ...body,
-        key: pendingRef.current.key,
+        key: requestKey,
       });
       pendingRef.current = null;
       showToast('New site created successfully', 's');

@@ -239,7 +239,7 @@ export function ReceivePaymentPage({
                 {/* 2. Payment Mode Dropdown Card (Vertical Scroll / Downward List) */}
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
                   <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'भुगतान माध्यम (Mode) *' : 'Payment Mode *'}
+                    {lang === 'hi' ? 'भुगतान मोड *' : 'Payment Mode *'}
                   </Text>
                   <View style={styles.siteBoxContainer}>
                     <AppIcon
@@ -247,12 +247,12 @@ export function ReceivePaymentPage({
                         formMode === 'CASH'
                           ? 'cash'
                           : formMode === 'BANK'
-                          ? 'business'
-                          : formMode === 'CHEQUE'
-                          ? 'document-text'
-                          : formMode === 'ONLINE'
-                          ? 'globe'
-                          : 'card'
+                            ? 'business'
+                            : formMode === 'CHEQUE'
+                              ? 'document-text'
+                              : formMode === 'ONLINE'
+                                ? 'globe'
+                                : 'card'
                       }
                       size={16}
                       color="#2563EB"
@@ -266,7 +266,7 @@ export function ReceivePaymentPage({
                       onValueChange={(val) => setFormMode(String(val))}
                       style={styles.pickerOverlay}
                       dropdownIconColor="transparent"
-                      prompt={lang === 'hi' ? 'भुगतान माध्यम चुनें' : 'Select Payment Mode'}
+                      prompt={lang === 'hi' ? 'भुगतान मोड चुनें' : 'Select Payment Mode'}
                     >
                       {PAYMENT_OPTIONS.map((m) => (
                         <Picker.Item key={m.key} label={m.label} value={m.key} />
@@ -471,11 +471,32 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     padding: 0,
   },
-  formActionRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  formCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  formCancelBtnText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
+  formActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+    width: '100%',
+  },
+  formCancelBtn: {
+    flex: 1,
+    minHeight: 46,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
   formSaveBtn: {
-    flex: 2,
+    flex: 1,
+    minHeight: 46,
     flexDirection: 'row',
     gap: 6,
     paddingVertical: 12,

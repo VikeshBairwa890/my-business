@@ -300,13 +300,21 @@ export async function request(path: string, token: string | null, body?: unknown
 
   // Maximum 2 attempts for transient connection glitches
   for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {}
+    }, 30000); // 30s timeout to allow DB operations & base64 uploads
+
     try {
       const res = await fetch(url, {
         method: body === undefined ? 'GET' : 'POST',
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(8000),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
 
       const rawText = await res.text();
       let json: any = null;
@@ -328,7 +336,18 @@ export async function request(path: string, token: string | null, body?: unknown
 
       return json;
     } catch (err: any) {
+      clearTimeout(timer);
       lastError = err;
+
+      const isAbort =
+        err?.name === 'AbortError' ||
+        String(err?.message || '').toLowerCase().includes('abort') ||
+        String(err?.message || '').toLowerCase().includes('canc');
+
+      if (isAbort) {
+        lastError = new Error('Request timed out. Please check your network connection.');
+      }
+
       // Never retry 4xx user/validation errors (e.g. invalid credentials 401, validation 400)
       if (err.status && err.status < 500) {
         throw err;

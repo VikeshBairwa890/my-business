@@ -24,8 +24,19 @@ export function createApp(db = null, options = {}) {
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   if (!testing) {
-    app.use(rateLimit({ windowMs: 60000, limit: 180, standardHeaders: 'draft-8', legacyHeaders: false, validate: { xForwardedForHeader: false, forwardedHeader: false } }));
+    app.use(rateLimit({
+      windowMs: 60000,
+      limit: 180,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      validate: false,
+    }));
   }
+
+  // Root endpoint for Vercel / health probes
+  app.get('/', (_req, res) => {
+    res.json({ ok: true, name: 'ThekaBook API', version: '0.1.0' });
+  });
 
   // Health Check
   app.get('/health', async (_req, res) => {

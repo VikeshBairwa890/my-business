@@ -2,6 +2,10 @@ import { randomBytes } from 'node:crypto';
 import prisma from '../../prisma.mjs';
 import { verifyPassword, hashToken } from './password.util.mjs';
 
+// In-memory cache for fast session verification across requests
+const sessionCache = new Map();
+const SESSION_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
 export class LoginService {
   /**
    * Authenticates user credentials and issues a new session token.
@@ -38,18 +42,30 @@ export class LoginService {
       },
     });
 
+    const userInfo = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      avatar: user.avatar || '',
+      role: user.role,
+      orgId: user.orgId,
+      organizationName: user.organization?.name || '',
+    };
+
+    // Pre-populate session cache
+    sessionCache.set(tokenHash, {
+      user: {
+        ...user,
+        organization: user.organization,
+      },
+      expiresAt,
+      cachedAt: Date.now(),
+    });
+
     return {
       token: rawToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || '',
-        avatar: user.avatar || '',
-        role: user.role,
-        orgId: user.orgId,
-        organizationName: user.organization?.name || '',
-      },
+      user: userInfo,
     };
   }
 
@@ -59,17 +75,32 @@ export class LoginService {
   static async logout(rawToken) {
     if (!rawToken) return;
     const tokenHash = hashToken(rawToken);
+    sessionCache.delete(tokenHash);
     await prisma.session.deleteMany({
       where: { tokenHash },
     });
   }
 
   /**
-   * Validates active session token.
+   * Invalidates cached session (e.g. after profile/org update)
+   */
+  static invalidateSessionCache(rawToken) {
+    if (!rawToken) return;
+    sessionCache.delete(hashToken(rawToken));
+  }
+
+  /**
+   * Validates active session token with in-memory caching to eliminate remote DB latency.
    */
   static async validateSession(rawToken) {
     if (!rawToken) return null;
     const tokenHash = hashToken(rawToken);
+
+    const now = Date.now();
+    const cached = sessionCache.get(tokenHash);
+    if (cached && (now - cached.cachedAt) < SESSION_CACHE_TTL_MS && cached.expiresAt > new Date()) {
+      return cached.user;
+    }
 
     const session = await prisma.session.findUnique({
       where: { tokenHash },
@@ -81,11 +112,18 @@ export class LoginService {
     });
 
     if (!session || session.expiresAt < new Date()) {
+      sessionCache.delete(tokenHash);
       if (session) {
-        await prisma.session.delete({ where: { tokenHash } }).catch(() => {});
+        await prisma.session.delete({ where: { tokenHash } }).catch(() => { });
       }
       return null;
     }
+
+    sessionCache.set(tokenHash, {
+      user: session.user,
+      expiresAt: session.expiresAt,
+      cachedAt: now,
+    });
 
     return session.user;
   }

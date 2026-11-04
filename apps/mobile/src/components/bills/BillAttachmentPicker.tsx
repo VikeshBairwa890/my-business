@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { AppIcon } from '../icons/AppIcon';
 import { BillImageViewerModal } from './BillImageViewerModal';
 
@@ -83,21 +84,64 @@ export function BillAttachmentPicker({
     reader.readAsDataURL(file);
   };
 
-  const handlePickFile = (captureCamera = false) => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
+  const handlePickFile = async (captureCamera = false) => {
+    try {
+      setLoading(true);
       if (captureCamera) {
-        input.capture = 'environment';
-      }
-      input.onchange = (e: any) => {
-        const file = e.target?.files?.[0];
-        if (file) {
-          resizeAndProcessImage(file);
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (perm.granted) {
+          const res = await ImagePicker.launchCameraAsync({
+            quality: 0.7,
+            base64: true,
+          });
+          if (!res.canceled && res.assets && res.assets[0]) {
+            const asset = res.assets[0];
+            const mime = asset.mimeType || 'image/jpeg';
+            const dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+            onPhotoSelected(dataUrl, asset.fileName || 'camera_bill.jpg');
+            setLoading(false);
+            return;
+          }
         }
-      };
-      input.click();
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (perm.granted) {
+          const res = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.7,
+            base64: true,
+          });
+          if (!res.canceled && res.assets && res.assets[0]) {
+            const asset = res.assets[0];
+            const mime = asset.mimeType || 'image/jpeg';
+            const dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+            onPhotoSelected(dataUrl, asset.fileName || 'gallery_bill.jpg');
+            setLoading(false);
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        if (captureCamera) {
+          input.capture = 'environment';
+        }
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            resizeAndProcessImage(file);
+          } else {
+            setLoading(false);
+          }
+        };
+        input.click();
+        return;
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -228,116 +272,30 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   optionalBadge: {
-    fontSize: 8.5,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#64748B',
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingVertical: 1.5,
+    borderRadius: 4,
   },
-  loadingBox: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  loadingText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-
-  /* Attached File Card */
-  attachedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    padding: 7,
-    gap: 9,
-  },
-  thumbnailWrapper: {
-    position: 'relative',
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  thumbnailImg: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  zoomPill: {
-    position: 'absolute',
-    right: 2,
-    bottom: 2,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    borderRadius: 3,
-    padding: 2,
-  },
-  infoCol: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 2,
-  },
-  fileNameText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  attachedStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
-  },
-  attachedStatusText: {
-    fontSize: 10,
-    color: '#15803D',
-    fontWeight: '600',
-  },
-  rightActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  iconActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  changeBtn: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  removeBtn: {
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-
-  /* Empty Dropzone */
   emptyDropzone: {
-    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   btnRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
     width: '100%',
   },
   uploadBtn: {
@@ -346,16 +304,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 7,
+    height: 38,
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
+    borderRadius: 8,
+    paddingHorizontal: 10,
   },
   uploadBtnText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#1D4ED8',
+  },
+  attachedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 8,
+    gap: 10,
+  },
+  thumbnailWrapper: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+  },
+  thumbnailImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  zoomPill: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 4,
+    padding: 2,
+  },
+  infoCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  fileNameText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  attachedStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  greenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  attachedStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  iconActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtn: {
+    backgroundColor: '#FEF2F2',
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });

@@ -33,7 +33,7 @@ export class WorkerService {
         skill: data.skill.trim(),
         dailyRate,
         overtimeRate,
-        photo: data.photo || '',
+        photo: data.photo || data.avatar || '',
         active: data.active !== undefined ? Boolean(data.active) : true,
       },
     });
@@ -52,7 +52,9 @@ export class WorkerService {
     if (data.overtimeRate !== undefined || data.overtime_rate !== undefined) {
       updateData.overtimeRate = Number(data.overtimeRate ?? data.overtime_rate);
     }
-    if (data.photo !== undefined) updateData.photo = data.photo;
+    if (data.photo !== undefined || data.avatar !== undefined) {
+      updateData.photo = data.photo ?? data.avatar ?? '';
+    }
     if (data.active !== undefined) updateData.active = Boolean(data.active);
 
     return await prisma.worker.update({

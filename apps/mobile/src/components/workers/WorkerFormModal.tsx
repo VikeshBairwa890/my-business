@@ -1,3 +1,4 @@
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState, useMemo } from 'react';
 import {
   Modal,
@@ -100,52 +101,88 @@ export function WorkerFormModal({
     String(spec.initial.photo || activeWorker?.photo || '')
   );
 
-  const handlePickImage = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = (e: any) => {
-        const file = e.target?.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (uploadEvent) => {
-          const rawDataUrl = uploadEvent.target?.result as string;
-          if (rawDataUrl) {
-            const img = new (window as any).Image();
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const maxDim = 320;
-              let w = img.width;
-              let h = img.height;
-              if (w > h) {
-                if (w > maxDim) {
-                  h = Math.round((h * maxDim) / w);
-                  w = maxDim;
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+
+  const handlePickImage = async () => {
+    try {
+      setUploadingImage(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setValidationError(
+          lang === 'hi'
+            ? 'फ़ोटो चुनने के लिए गैलरी की अनुमति दें'
+            : 'Please grant permission to access photos'
+        );
+        setUploadingImage(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          const mime = asset.mimeType || 'image/jpeg';
+          setPhoto(`data:${mime};base64,${asset.base64}`);
+        } else if (asset.uri) {
+          setPhoto(asset.uri);
+        }
+      }
+    } catch (err: any) {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (uploadEvent) => {
+            const rawDataUrl = uploadEvent.target?.result as string;
+            if (rawDataUrl) {
+              const img = new (window as any).Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const maxDim = 320;
+                let w = img.width;
+                let h = img.height;
+                if (w > h) {
+                  if (w > maxDim) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                  }
+                } else {
+                  if (h > maxDim) {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                  }
                 }
-              } else {
-                if (h > maxDim) {
-                  w = Math.round((w * maxDim) / h);
-                  h = maxDim;
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0, w, h);
+                  const compressed = canvas.toDataURL('image/jpeg', 0.8);
+                  setPhoto(compressed);
+                } else {
+                  setPhoto(rawDataUrl);
                 }
-              }
-              canvas.width = w;
-              canvas.height = h;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(img, 0, 0, w, h);
-                const compressed = canvas.toDataURL('image/jpeg', 0.85);
-                setPhoto(compressed);
-              } else {
-                setPhoto(rawDataUrl);
-              }
-            };
-            img.src = rawDataUrl;
-          }
+              };
+              img.src = rawDataUrl;
+            }
+          };
+          reader.readAsDataURL(file);
         };
-        reader.readAsDataURL(file);
-      };
-      input.click();
+        input.click();
+      }
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -225,7 +262,7 @@ export function WorkerFormModal({
   // Quick Communication
   const handleCall = () => {
     if (phone) {
-      Linking.openURL(`tel:${phone.replace(/\s+/g, '')}`).catch(() => {});
+      Linking.openURL(`tel:${phone.replace(/\s+/g, '')}`).catch(() => { });
     }
   };
 
@@ -233,7 +270,7 @@ export function WorkerFormModal({
     if (phone) {
       const cleanPhone = phone.replace(/\D/g, '');
       const fullPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-      Linking.openURL(`https://wa.me/${fullPhone}`).catch(() => {});
+      Linking.openURL(`https://wa.me/${fullPhone}`).catch(() => { });
     }
   };
 
@@ -460,16 +497,24 @@ export function WorkerFormModal({
               <View style={styles.photoActionBtnsRow}>
                 <Pressable
                   onPress={handlePickImage}
+                  disabled={uploadingImage}
                   style={({ pressed }) => [
                     styles.photoPickBtn,
                     pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                    uploadingImage && { opacity: 0.7 },
                   ]}
                 >
-                  <AppIcon name="cloud-upload-outline" size={14} color="#FFFFFF" />
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+                  ) : (
+                    <AppIcon name="cloud-upload-outline" size={14} color="#FFFFFF" />
+                  )}
                   <Text style={styles.photoPickBtnText}>
-                    {photo
-                      ? (lang === 'hi' ? 'फ़ोटो बदलें' : 'Change Photo')
-                      : (lang === 'hi' ? 'फ़ोटो अपलोड करें' : 'Upload Photo')}
+                    {uploadingImage
+                      ? (lang === 'hi' ? 'लोड हो रहा है...' : 'Loading...')
+                      : photo
+                        ? (lang === 'hi' ? 'फ़ोटो बदलें' : 'Change Photo')
+                        : (lang === 'hi' ? 'फ़ोटो अपलोड करें' : 'Upload Photo')}
                   </Text>
                 </Pressable>
 
@@ -1686,7 +1731,7 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   saveBtn: {
-    flex: 2,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

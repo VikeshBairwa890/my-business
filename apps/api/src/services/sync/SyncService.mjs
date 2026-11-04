@@ -4,22 +4,23 @@ import { SiteService } from '../sites/SiteService.mjs';
 import { WorkerService } from '../workers/WorkerService.mjs';
 import { AttendanceService } from '../attendance/AttendanceService.mjs';
 import { EntryService } from '../entries/EntryService.mjs';
+import { LoginService } from '../auth/LoginService.mjs';
 import prisma from '../../prisma.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 
 export class SyncService {
   static async getSnapshot(orgId, userId) {
-    const org = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { id: true, name: true, revision: true },
-    });
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, orgId: true, name: true, email: true, createdAt: true },
-    });
-
-    const [sites, workers, attendances, entries, audits] = await Promise.all([
+    // Run all 7 database queries concurrently in a single Promise.all
+    const [org, user, sites, workers, attendances, entries, audits] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { id: true, name: true, revision: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, orgId: true, name: true, email: true, createdAt: true },
+      }),
       prisma.site.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' } }),
       prisma.worker.findMany({ where: { orgId }, orderBy: { name: 'asc' } }),
       prisma.attendance.findMany({ where: { orgId }, orderBy: { date: 'asc' } }),
@@ -147,16 +148,14 @@ export class SyncService {
       after = await EntryService.void(orgId, entity, data?.reason);
     }
 
-    // Increment revision
-    await prisma.organization.update({
-      where: { id: orgId },
-      data: { revision: { increment: 1 } },
-    });
-
     const response = { record: after };
 
-    // Record audit and idempotency request
+    // Increment revision, record audit and idempotency request in parallel
     await Promise.all([
+      prisma.organization.update({
+        where: { id: orgId },
+        data: { revision: { increment: 1 } },
+      }),
       prisma.audit.create({
         data: {
           orgId,

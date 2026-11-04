@@ -2659,7 +2659,7 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   saveBtn: {
-    flex: 2,
+    flex: 1,
     height: 48,
     borderRadius: 10,
     backgroundColor: '#2563EB',
