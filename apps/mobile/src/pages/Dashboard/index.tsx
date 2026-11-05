@@ -113,9 +113,9 @@ export function DashboardPage({
     'ThekaBook Business';
 
   const rawName =
-    localContractorName ||
     data?.user?.name ||
     user?.name ||
+    localContractorName ||
     'Contractor';
 
   const contractorDisplayName = rawName;

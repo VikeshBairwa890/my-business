@@ -359,7 +359,7 @@ export function WagePaymentModal({
                 <Text style={styles.dateText}>{date}</Text>
               </View>
               <Text style={styles.dateChangeText}>
-                {date === today() ? (lang === 'hi' ? 'आज (Today)' : 'Today') : 'Change'}
+                {lang === 'hi' ? 'बदलें' : 'Change'}
               </Text>
             </Pressable>
 
@@ -469,11 +469,7 @@ export function WagePaymentModal({
               <>
                 <AppIcon name="checkmark-sharp" size={16} color="#FFFFFF" />
                 <Text style={styles.submitBtnText}>
-                  {amount.trim() && Number(amount) > 0
-                    ? `${lang === 'hi' ? 'भुगतान सेव करें' : 'Save Payment'} (${money(Number(amount) * 100)})`
-                    : lang === 'hi'
-                      ? 'भुगतान सुरक्षित करें'
-                      : 'Save Wage Payment'}
+                  {lang === 'hi' ? 'भुगतान सेव करें' : 'Save Payment'}
                 </Text>
               </>
             )}

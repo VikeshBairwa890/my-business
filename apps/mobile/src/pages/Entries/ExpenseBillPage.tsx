@@ -50,11 +50,11 @@ const EXPENSE_CATEGORIES = [
 ];
 
 const PAYMENT_MODES = [
-  { key: 'CASH', label: 'नकद (Cash)', icon: 'cash' },
-  { key: 'UPI', label: 'UPI / PhonePe', icon: 'card' },
-  { key: 'RECORD', label: 'उधार / बिल देय (Due Bill)', icon: 'document-text' },
-  { key: 'BANK', label: 'बैंक ट्रांसफर (Bank)', icon: 'business' },
-  { key: 'CHEQUE', label: 'चेक (Cheque)', icon: 'receipt' },
+  { key: 'CASH', label: 'Cash', icon: 'cash' },
+  { key: 'UPI', label: 'UPI', icon: 'card' },
+  { key: 'RECORD', label: 'Due / Credit', icon: 'document-text' },
+  { key: 'BANK', label: 'Bank', icon: 'business' },
+  { key: 'CHEQUE', label: 'Cheque', icon: 'receipt' },
 ];
 
 export function ExpenseBillPage({
@@ -239,11 +239,11 @@ export function ExpenseBillPage({
                   </Text>
                   <AppIcon name="chevron-down" size={14} color="#64748B" />
                   <Picker
+                    mode="dropdown"
                     selectedValue={formSiteId}
                     onValueChange={(val) => setFormSiteId(String(val))}
                     style={styles.pickerOverlay}
                     dropdownIconColor="transparent"
-                    prompt={lang === 'hi' ? 'साइट चुनें' : 'Select Work Site'}
                   >
                     {data.sites.map((s) => (
                       <Picker.Item
@@ -269,6 +269,7 @@ export function ExpenseBillPage({
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
+                      mode="dropdown"
                       selectedValue={formCategory}
                       onValueChange={(val) => setFormCategory(String(val))}
                       style={styles.pickerOverlay}
@@ -370,11 +371,11 @@ export function ExpenseBillPage({
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
+                      mode="dropdown"
                       selectedValue={formMode}
                       onValueChange={(val) => setFormMode(String(val))}
                       style={styles.pickerOverlay}
                       dropdownIconColor="transparent"
-                      prompt={lang === 'hi' ? 'भुगतान मोड चुनें' : 'Select Mode'}
                     >
                       {PAYMENT_MODES.map((m) => (
                         <Picker.Item key={m.key} label={m.label} value={m.key} />
@@ -460,9 +461,7 @@ export function ExpenseBillPage({
                     <>
                       <AppIcon name="checkmark" size={16} color="#FFFFFF" />
                       <Text style={styles.formSaveBtnText}>
-                        {formAmount
-                          ? `${lang === 'hi' ? 'खर्च दर्ज करें' : 'Save'} ${money(Number(formAmount) * 100)}`
-                          : (lang === 'hi' ? 'खर्च सुरक्षित करें' : 'Save Expense')}
+                        {lang === 'hi' ? 'खर्च सेव करें' : 'Save Expense'}
                       </Text>
                     </>
                   )}
@@ -549,7 +548,7 @@ export function ExpenseBillPage({
                               isDue ? styles.billModeTextDue : styles.billModeTextPaid,
                             ]}
                           >
-                            {isDue ? (lang === 'hi' ? 'उधार' : 'Due') : (exp.mode || 'CASH')}
+                            {isDue ? 'Due' : (exp.mode || 'CASH')}
                           </Text>
                         </View>
                       </View>

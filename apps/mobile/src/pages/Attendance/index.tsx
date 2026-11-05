@@ -89,7 +89,7 @@ export function AttendancePage({
   }
 
   // =========================================================================
-  // ATTENDANCE SELECTION SCREEN (Exact same options design as user screenshot)
+  // ATTENDANCE SELECTION SCREEN (Exact 3 Cards from Screenshot - Sleek & Compact)
   // =========================================================================
   const menuOptions = [
     {
@@ -97,6 +97,7 @@ export function AttendancePage({
       title: 'Bulk Attendance',
       icon: 'people',
       iconColor: '#2563EB',
+      iconBg: '#EFF6FF',
       onPress: () => setSubpage('BULK'),
     },
     {
@@ -104,6 +105,7 @@ export function AttendancePage({
       title: 'Daily Attendance',
       icon: 'time',
       iconColor: '#D97706',
+      iconBg: '#FEF3C7',
       onPress: () => setSubpage('DAILY'),
     },
     {
@@ -111,13 +113,14 @@ export function AttendancePage({
       title: 'Monthly Attendance',
       icon: 'calendar',
       iconColor: '#C2410C',
+      iconBg: '#FFEDD5',
       onPress: () => setSubpage('MONTHLY'),
     },
   ];
 
   return (
     <View style={styles.pageWrapper}>
-      {/* Top Header matching user screenshot */}
+      {/* Top Header */}
       <TopNavBar
         title="Attendance"
         subtitle="Worker attendance & registers"
@@ -153,18 +156,19 @@ export function AttendancePage({
               accessibilityLabel={item.title}
             >
               <View style={styles.cardLeftContent}>
-                <View style={styles.iconWrap}>
+                <View style={[styles.iconWrap, { backgroundColor: item.iconBg }]}>
                   <AppIcon
                     name={item.icon as any}
-                    size={22}
+                    size={18}
                     color={item.iconColor}
                   />
                 </View>
                 <Text style={styles.cardTitleText}>{item.title}</Text>
               </View>
 
-              <AppIcon name="chevron-forward" size={18} color="#94A3B8" />
-            </Pressable>          ))}
+              <AppIcon name="chevron-forward" size={16} color="#94A3B8" />
+            </Pressable>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -174,36 +178,37 @@ export function AttendancePage({
 const styles = StyleSheet.create({
   pageWrapper: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   scroll: {
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   container: {
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
-    gap: 12,
+    gap: 8,
   },
   menuCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: 10,
+    borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     ...Platform.select({
       web: {
         cursor: 'pointer',
-        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+        boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
       } as any,
       default: {
         elevation: 1,
@@ -218,19 +223,18 @@ const styles = StyleSheet.create({
   cardLeftContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     flex: 1,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
   },
   cardTitleText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.2,

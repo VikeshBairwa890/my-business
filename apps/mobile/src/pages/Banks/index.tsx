@@ -446,8 +446,7 @@ export function BanksPage({
                   style={({ pressed }) => [styles.actionLinkBtn, pressed && styles.btnPressed]}
                   onPress={() => handleOpenEdit(acc)}
                 >
-                  <Ionicons name="create-outline" size={15} color="#2563EB" />
-                  <Text style={styles.actionLinkText}>Edit</Text>
+                  <Ionicons name="create-outline" size={16} color="#2563EB" />
                 </Pressable>
 
                 {accounts.length > 1 ? (

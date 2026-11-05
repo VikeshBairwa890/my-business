@@ -400,11 +400,11 @@ export function BulkAttendancePage({
 
           {/* Universal Native Picker with built-in scroll bar on click */}
           <Picker
+            mode="dropdown"
             selectedValue={selectedSiteId}
             onValueChange={(val: any) => setSelectedSiteId(String(val))}
             style={styles.nativeHiddenPicker}
             dropdownIconColor="transparent"
-            prompt="Select Work Site"
           >
             {data.sites.map((s) => (
               <Picker.Item

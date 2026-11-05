@@ -196,21 +196,19 @@ export function WorkerDetailModal({
                       {worker.skill || 'General Labour'}
                     </Text>
                   </View>
+                  {worker.phone ? (
+                    <Pressable onPress={handleCall} style={styles.phoneChip}>
+                      <AppIcon name="call" size={11} color="#16A34A" />
+                      <Text style={styles.phoneChipText}>{worker.phone}</Text>
+                    </Pressable>
+                  ) : null}
                   <Text style={styles.rateBadgeText}>
                     {money(worker.daily_rate)}/day
                     {worker.overtime_rate ? ` • OT ${money(worker.overtime_rate)}/hr` : ''}
                   </Text>
                 </View>
 
-                {worker.phone ? (
-                  <Pressable onPress={handleCall} style={styles.phoneRow}>
-                    <AppIcon name="call" size={12} color="#16A34A" />
-                    <Text style={styles.phoneText}>{worker.phone}</Text>
-                    <View style={styles.callPill}>
-                      <Text style={styles.callPillText}>Call</Text>
-                    </View>
-                  </Pressable>
-                ) : null}
+                
               </View>
             </View>
 
@@ -579,8 +577,7 @@ export function WorkerDetailModal({
                 pressed && { opacity: 0.8 },
               ]}
             >
-              <AppIcon name="create-outline" size={15} color="#334155" />
-              <Text style={styles.footerSecondaryBtnText}>Edit Profile</Text>
+              <AppIcon name="create-outline" size={16} color="#334155" />
             </Pressable>
 
             <Pressable
@@ -717,6 +714,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
+  phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 3.5, borderRadius: 6, borderWidth: 1, borderColor: '#DCFCE7' },
+  phoneChipText: { fontSize: 11.5, fontWeight: '700', color: '#15803D' },
   phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',

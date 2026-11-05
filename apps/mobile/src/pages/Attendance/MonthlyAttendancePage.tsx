@@ -339,11 +339,11 @@ export function MonthlyAttendancePage({
 
                     {/* Universal Native Picker for Mobile (Android/iOS) & Web - Individual Workers Only */}
                     <Picker
+                      mode="dropdown"
                       selectedValue={selectedWorkerId || currentMonthlyWorker?.id}
                       onValueChange={(val: any) => setSelectedWorkerId(String(val))}
                       style={styles.nativeHiddenPicker}
                       dropdownIconColor="transparent"
-                      prompt="Select Labour / Worker"
                     >
                       {data.workers.map((w) => (
                         <Picker.Item

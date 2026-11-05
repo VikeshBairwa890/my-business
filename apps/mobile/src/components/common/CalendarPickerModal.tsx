@@ -167,34 +167,7 @@ export function CalendarPickerModal({
   const handleSelectDay = (iso: string, disabled: boolean) => {
     if (disabled || !iso) return;
     setActiveDate(iso);
-  };
-
-  // Quick Shortcuts
-  const applyQuickShortcut = (daysToAdd: number) => {
-    const base = new Date();
-    base.setDate(base.getDate() + daysToAdd);
-    const iso = base.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    if (minDate && iso < minDate) return;
-    if (maxDate && iso > maxDate) return;
-    setActiveDate(iso);
-    setCurrentYear(base.getFullYear());
-    setCurrentMonth(base.getMonth());
-  };
-
-  const applyMonthsShortcut = (monthsToAdd: number) => {
-    const base = new Date();
-    base.setMonth(base.getMonth() + monthsToAdd);
-    const iso = base.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    if (minDate && iso < minDate) return;
-    if (maxDate && iso > maxDate) return;
-    setActiveDate(iso);
-    setCurrentYear(base.getFullYear());
-    setCurrentMonth(base.getMonth());
-  };
-
-  const handleConfirm = () => {
-    if (maxDate && activeDate > maxDate) return;
-    onSelect(activeDate);
+    onSelect(iso);
     onClose();
   };
 
@@ -235,74 +208,6 @@ export function CalendarPickerModal({
             >
               <AppIcon name="close" size={20} color={Colors.textPrimary} />
             </Pressable>
-          </View>
-
-          {/* Quick Preset Buttons */}
-          <View style={styles.quickPillsWrap}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickPillsScroll}
-            >
-              <Pressable
-                onPress={() => applyQuickShortcut(0)}
-                style={[
-                  styles.quickPill,
-                  activeDate === todayIso && styles.quickPillActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.quickPillText,
-                    activeDate === todayIso && styles.quickPillTextActive,
-                  ]}
-                >
-                  Today
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyQuickShortcut(1)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>Tomorrow</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyQuickShortcut(7)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>+7 Days</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyQuickShortcut(15)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>+15 Days</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyMonthsShortcut(1)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>+1 Month</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyMonthsShortcut(3)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>+3 Months</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => applyMonthsShortcut(6)}
-                style={styles.quickPill}
-              >
-                <Text style={styles.quickPillText}>+6 Months</Text>
-              </Pressable>
-            </ScrollView>
           </View>
 
           {/* Month & Year Navigator */}
@@ -396,7 +301,7 @@ export function CalendarPickerModal({
 
           {/* Footer Actions */}
           <View style={styles.footerRow}>
-            {allowClear ? (
+            {allowClear && (
               <Pressable
                 onPress={handleClear}
                 style={({ pressed }) => [
@@ -407,31 +312,17 @@ export function CalendarPickerModal({
                 <AppIcon name="trash-outline" size={16} color={Colors.danger} />
                 <Text style={styles.clearBtnText}>Clear Date</Text>
               </Pressable>
-            ) : (
-              <View style={{ flex: 1 }} />
             )}
 
-            <View style={styles.actionButtonsRight}>
-              <Pressable
-                onPress={onClose}
-                style={({ pressed }) => [
-                  styles.cancelBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleConfirm}
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-                ]}
-              >
-                <Text style={styles.confirmBtnText}>Confirm</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -623,8 +514,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },

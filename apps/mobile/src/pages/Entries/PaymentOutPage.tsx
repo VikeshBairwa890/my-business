@@ -276,11 +276,11 @@ export function PaymentOutPage({
                   </Text>
                   <AppIcon name="chevron-down" size={14} color="#64748B" />
                   <Picker
+                    mode="dropdown"
                     selectedValue={formSiteId}
                     onValueChange={(val) => setFormSiteId(String(val))}
                     style={styles.pickerOverlay}
                     dropdownIconColor="transparent"
-                    prompt={lang === 'hi' ? 'साइट चुनें' : 'Select Work Site'}
                   >
                     {data.sites.map((s) => (
                       <Picker.Item
@@ -309,11 +309,11 @@ export function PaymentOutPage({
                       </Text>
                       <AppIcon name="chevron-down" size={13} color="#64748B" />
                       <Picker
+                        mode="dropdown"
                         selectedValue={formWorkerId}
                         onValueChange={(val) => setFormWorkerId(String(val))}
                         style={styles.pickerOverlay}
                         dropdownIconColor="transparent"
-                        prompt={lang === 'hi' ? 'मजदूर चुनें' : 'Select Worker'}
                       >
                         {data.workers.map((w) => (
                           <Picker.Item
@@ -406,11 +406,11 @@ export function PaymentOutPage({
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
+                      mode="dropdown"
                       selectedValue={formMode}
                       onValueChange={(val) => setFormMode(String(val))}
                       style={styles.pickerOverlay}
                       dropdownIconColor="transparent"
-                      prompt={lang === 'hi' ? 'भुगतान मोड चुनें' : 'Select Payment Mode'}
                     >
                       {PAYMENT_OPTIONS.map((m) => (
                         <Picker.Item key={m.key} label={m.label} value={m.key} />
@@ -476,9 +476,7 @@ export function PaymentOutPage({
                     <>
                       <AppIcon name="checkmark" size={16} color="#FFFFFF" />
                       <Text style={styles.formSaveBtnText}>
-                        {formAmount
-                          ? `${lang === 'hi' ? 'भुगतान करें' : 'Pay'} ${money(Number(formAmount) * 100)}`
-                          : (lang === 'hi' ? 'भुगतान दर्ज करें' : 'Save Payment')}
+                        {lang === 'hi' ? 'भुगतान सेव करें' : 'Save Payment'}
                       </Text>
                     </>
                   )}

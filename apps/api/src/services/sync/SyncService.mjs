@@ -9,8 +9,30 @@ import prisma from '../../prisma.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 
+// In-memory snapshot cache (orgId:userId -> { data, timestamp })
+const snapshotCache = new Map();
+const SNAPSHOT_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
 export class SyncService {
+  static invalidateSnapshotCache(orgId) {
+    if (!orgId) {
+      snapshotCache.clear();
+      return;
+    }
+    for (const key of snapshotCache.keys()) {
+      if (key.startsWith(`${orgId}:`)) {
+        snapshotCache.delete(key);
+      }
+    }
+  }
+
   static async getSnapshot(orgId, userId) {
+    const cacheKey = `${orgId}:${userId}`;
+    const cached = snapshotCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < SNAPSHOT_CACHE_TTL_MS)) {
+      return cached.data;
+    }
+
     // Run all 7 database queries concurrently in a single Promise.all
     const [org, user, sites, workers, attendances, entries, audits] = await Promise.all([
       prisma.organization.findUnique({
@@ -79,7 +101,7 @@ export class SyncService {
       created_at: a.createdAt,
     }));
 
-    return {
+    const snapshot = {
       organization: { ...org, revision: org?.revision || 0 },
       user: { ...user, org_id: user?.orgId },
       sites: formattedSites,
@@ -88,6 +110,13 @@ export class SyncService {
       entries: formattedEntries,
       audit: formattedAudits,
     };
+
+    snapshotCache.set(cacheKey, {
+      data: snapshot,
+      timestamp: Date.now(),
+    });
+
+    return snapshot;
   }
 
   static async executeCommand(orgId, userId, command) {
@@ -175,6 +204,9 @@ export class SyncService {
         },
       }),
     ]);
+
+    // Invalidate cached snapshot for this organization so next read is 100% fresh
+    SyncService.invalidateSnapshotCache(orgId);
 
     return response;
   }

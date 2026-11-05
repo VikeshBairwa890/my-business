@@ -323,11 +323,6 @@ export function AttendanceModal({
                 <View style={styles.sectionHeadingRow}>
                   <AppIcon name="calendar-outline" size={16} color="#2563EB" />
                   <Text style={styles.sectionTitle}>Attendance Date</Text>
-                  {isToday && (
-                    <View style={styles.todayPill}>
-                      <Text style={styles.todayPillText}>Today</Text>
-                    </View>
-                  )}
                 </View>
 
                 <Pressable
@@ -381,11 +376,11 @@ export function AttendanceModal({
 
                   {/* Universal Native Picker for Mobile & Web */}
                   <Picker
+                    mode="dropdown"
                     selectedValue={siteId}
                     onValueChange={(val: any) => setSiteId(String(val))}
                     style={styles.nativeHiddenPicker}
                     dropdownIconColor="transparent"
-                    prompt="Select Work Site"
                   >
                     {data.sites.map((s) => (
                       <Picker.Item
@@ -434,11 +429,11 @@ export function AttendanceModal({
                     <AppIcon name="chevron-down" size={16} color="#64748B" />
 
                     <Picker
+                      mode="dropdown"
                       selectedValue={workerId}
                       onValueChange={(val: any) => setWorkerId(String(val))}
                       style={styles.nativeHiddenPicker}
                       dropdownIconColor="transparent"
-                      prompt="Select Worker"
                     >
                       {data.workers.filter((w) => w.active).map((w) => (
                         <Picker.Item

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   RefreshControl,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -149,6 +150,7 @@ export function SitesPage({
       .filter((e) => e.site_id === site.id)
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
+    const statusTheme = getSiteStatusTheme(site.status);
     const statusBadgeLabel =
       site.status === 'ONGOING'
         ? t('active', 'Active')
@@ -186,61 +188,73 @@ export function SitesPage({
             <View style={styles.siteHeaderCard}>
               {/* Primary Header: Avatar + Title & Meta + Edit Button */}
               <View style={styles.headerPrimaryRow}>
-                <View style={styles.siteAvatar}>
-                  <AppIcon name="business" size={22} color={Colors.primary} />
+                <View
+                  style={[
+                    styles.siteAvatar,
+                    { backgroundColor: statusTheme.bg, borderColor: statusTheme.badgeBg },
+                  ]}
+                >
+                  <AppIcon
+                    name={site.work_type === 'LABOUR' ? 'hammer' : 'business'}
+                    size={20}
+                    color={statusTheme.color}
+                  />
                 </View>
 
                 <View style={styles.headerMainCol}>
-                  <Text style={styles.siteTitle}>
-                    {site.name}
-                  </Text>
+                  {/* Title & Status + Edit Row */}
+                  <View style={styles.siteTitleRow}>
+                    <Text style={styles.siteTitle} numberOfLines={1}>
+                      {site.name}
+                    </Text>
 
-                  {/* Clean Status & Client Subtitle */}
-                  <View style={styles.headerMetaRow}>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        site.status === 'ONGOING'
-                          ? styles.statusBadgeOngoing
-                          : site.status === 'COMPLETED'
-                            ? styles.statusBadgeCompleted
-                            : styles.statusBadgePaused,
-                      ]}
-                    >
+                    <View style={styles.headerRightGroup}>
                       <View
                         style={[
-                          styles.statusDot,
-                          site.status === 'ONGOING'
-                            ? styles.statusDotOngoing
-                            : site.status === 'COMPLETED'
-                              ? styles.statusDotCompleted
-                              : styles.statusDotPaused,
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.statusBadgeText,
-                          site.status === 'ONGOING'
-                            ? styles.statusTextOngoing
-                            : site.status === 'COMPLETED'
-                              ? styles.statusTextCompleted
-                              : styles.statusTextPaused,
+                          styles.statusBadge,
+                          {
+                            backgroundColor: statusTheme.badgeBg,
+                            borderColor: statusTheme.badgeBg,
+                          },
                         ]}
                       >
-                        {site.status === 'ONGOING'
-                          ? 'Ongoing'
-                          : site.status === 'COMPLETED'
-                            ? 'Completed'
-                            : 'Paused'}
-                      </Text>
-                    </View>
+                        <View
+                          style={[
+                            styles.statusDot,
+                            { backgroundColor: statusTheme.color },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            { color: statusTheme.color },
+                          ]}
+                        >
+                          {statusBadgeLabel}
+                        </Text>
+                      </View>
 
-                    <Text style={styles.metaDotDivider}>•</Text>
-
-                    <View style={styles.clientInlineGroup}>
-                      <AppIcon name="person" size={12} color="#64748B" />
-                      <Text style={styles.clientInlineName}>{site.owner_name}</Text>
+                      <Pressable
+                        onPress={() => onEditSite(site)}
+                        style={({ pressed }) => [
+                          styles.editSiteBtn,
+                          pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
+                        ]}
+                        accessibilityLabel="Edit site details"
+                      >
+                        <AppIcon name="create-outline" size={14} color="#334155" />
+                      </Pressable>
                     </View>
+                  </View>
+
+                  {/* Clean Client, Location & Phone Row */}
+                  <View style={styles.headerMetaRow}>
+                    {site.owner_name ? (
+                      <View style={styles.clientInlineGroup}>
+                        <AppIcon name="person" size={12} color="#64748B" />
+                        <Text style={styles.clientInlineName}>{site.owner_name}</Text>
+                      </View>
+                    ) : null}
 
                     {site.phone ? (
                       <>
@@ -248,6 +262,18 @@ export function SitesPage({
                         <View style={styles.phoneInlineGroup}>
                           <AppIcon name="call" size={12} color="#16A34A" />
                           <Text style={styles.phoneInlineText}>{site.phone}</Text>
+                        </View>
+                      </>
+                    ) : null}
+
+                    {site.address ? (
+                      <>
+                        <Text style={styles.metaDotDivider}>•</Text>
+                        <View style={styles.clientInlineGroup}>
+                          <AppIcon name="location-outline" size={12} color="#D97706" />
+                          <Text style={styles.clientInlineName} numberOfLines={1}>
+                            {site.address}{state ? `, ${state}` : ''}
+                          </Text>
                         </View>
                       </>
                     ) : null}
@@ -262,24 +288,12 @@ export function SitesPage({
                     ) : null}
                   </View>
                 </View>
-
-                <Pressable
-                  onPress={() => onEditSite(site)}
-                  style={({ pressed }) => [
-                    styles.editSiteBtn,
-                    pressed && { opacity: 0.7, transform: [{ scale: 0.96 }] },
-                  ]}
-                  accessibilityLabel="Edit site details"
-                >
-                  <AppIcon name="create-outline" size={13} color="#334155" />
-                  <Text style={styles.editSiteBtnText}>Edit</Text>
-                </Pressable>
               </View>
 
               {/* Clean hairline separator */}
               <View style={styles.cardDivider} />
 
-              {/* Key Project Specs Chips - Wrapping naturally with no truncation */}
+              {/* Key Project Specs Chips */}
               <View style={styles.specsChipsContainer}>
                 {/* Scope & Rate */}
                 <View style={styles.specChip}>
@@ -304,17 +318,7 @@ export function SitesPage({
                   <View style={styles.specChip}>
                     <AppIcon name="calendar-outline" size={13} color="#059669" />
                     <Text style={styles.specChipText}>
-                      {site.start_date}{site.end_date ? ` → ${site.end_date}` : ` (${t('active', 'Active')})`}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* Location */}
-                {site.address ? (
-                  <View style={styles.specChip}>
-                    <AppIcon name="location-outline" size={13} color="#D97706" />
-                    <Text style={styles.specChipText}>
-                      {site.address}{state ? `, ${state}` : ''}
+                      {site.start_date}{site.end_date ? ` → ${site.end_date}` : ` (${statusBadgeLabel})`}
                     </Text>
                   </View>
                 ) : null}
@@ -373,37 +377,100 @@ export function SitesPage({
               ) : null}
             </View>
 
-            {/* Financial Stat Cards */}
-            <View style={styles.metricsGrid}>
-              <MetricCard
-                label={t('agreedContract', 'Agreed Contract')}
-                value={money(f.contract)}
-                foot={t('totalProjectValue', 'Total project value')}
-                icon="business-outline"
-              />
-              <MetricCard
-                label={t('totalReceived', 'Received')}
-                value={money(f.received)}
-                foot={t('collectedSoFar', 'Collected so far')}
-                tone="success"
-                icon="cash-outline"
-              />
-              <MetricCard
-                label={t('clientBalance', 'Client Balance')}
-                value={money(f.ownerBalance)}
-                foot={f.ownerBalance < 0 ? t('overpaid', 'Overpaid') : t('pendingToCollect', 'Pending to collect')}
-                tone={f.ownerBalance < 0 ? 'danger' : 'warning'}
-                icon="wallet-outline"
-              />
-              <MetricCard
-                label={f.final ? t('finalMargin', 'Final Margin') : t('estMargin', 'Est. Margin')}
-                value={money(f.profit)}
-                foot={t('projectedMargin', 'Projected contractor margin')}
-                accent
-                tone={f.profit >= 0 ? 'success' : 'danger'}
-                icon="trending-up"
-              />
-            </View>
+            {/* Financial Stat Cards - Simple 1-Row Compact Cards */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.metricsRow}
+            >
+              {/* Card 1: Agreed Contract */}
+              <View style={[styles.miniMetricCard, styles.miniMetricContract]}>
+                <View style={styles.miniMetricTop}>
+                  <AppIcon name="business-outline" size={13} color="#2563EB" />
+                  <Text style={styles.miniMetricLabel} numberOfLines={1}>
+                    {lang === 'hi' ? 'कुल ठेका' : 'Contract'}
+                  </Text>
+                </View>
+                <Text style={styles.miniMetricValue} numberOfLines={1}>
+                  {money(f.contract)}
+                </Text>
+              </View>
+
+              {/* Card 2: Received */}
+              <View style={[styles.miniMetricCard, styles.miniMetricReceived]}>
+                <View style={styles.miniMetricTop}>
+                  <AppIcon name="cash-outline" size={13} color="#16A34A" />
+                  <Text style={[styles.miniMetricLabel, { color: '#15803D' }]} numberOfLines={1}>
+                    {lang === 'hi' ? 'प्राप्त हुआ' : 'Received'}
+                  </Text>
+                </View>
+                <Text style={[styles.miniMetricValue, { color: '#16A34A' }]} numberOfLines={1}>
+                  {money(f.received)}
+                </Text>
+              </View>
+
+              {/* Card 3: Client Balance */}
+              <View style={[styles.miniMetricCard, f.ownerBalance > 0 ? styles.miniMetricPending : styles.miniMetricSettled]}>
+                <View style={styles.miniMetricTop}>
+                  <AppIcon
+                    name="wallet-outline"
+                    size={13}
+                    color={f.ownerBalance > 0 ? '#D97706' : '#16A34A'}
+                  />
+                  <Text
+                    style={[
+                      styles.miniMetricLabel,
+                      { color: f.ownerBalance > 0 ? '#92400E' : '#15803D' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {f.ownerBalance < 0
+                      ? (lang === 'hi' ? 'ज्यादा मिला' : 'Overpaid')
+                      : (lang === 'hi' ? 'लेना बाकी' : 'Balance Due')}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.miniMetricValue,
+                    { color: f.ownerBalance > 0 ? '#B45309' : '#15803D' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {money(Math.abs(f.ownerBalance))}
+                </Text>
+              </View>
+
+              {/* Card 4: Margin */}
+              <View style={[styles.miniMetricCard, f.profit >= 0 ? styles.miniMetricProfit : styles.miniMetricLoss]}>
+                <View style={styles.miniMetricTop}>
+                  <AppIcon
+                    name={f.profit >= 0 ? 'trending-up' : 'trending-down'}
+                    size={13}
+                    color={f.profit >= 0 ? '#16A34A' : '#DC2626'}
+                  />
+                  <Text
+                    style={[
+                      styles.miniMetricLabel,
+                      { color: f.profit >= 0 ? '#15803D' : '#991B1B' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {f.final
+                      ? (lang === 'hi' ? 'अंतिम बचत' : 'Final Margin')
+                      : (lang === 'hi' ? 'अनुमानित बचत' : 'Est. Margin')}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.miniMetricValue,
+                    { color: f.profit >= 0 ? '#16A34A' : '#DC2626' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {money(f.profit)}
+                </Text>
+              </View>
+            </ScrollView>
 
             {/* Agreements & Documents Section */}
             <Card style={styles.documentsCard}>
@@ -794,50 +861,46 @@ export function SitesPage({
       >
         <View style={styles.container}>
 
-          {/* Quick Stats Overview 2x2 KPI Grid */}
+          {/* Quick Stats Overview: 2 Sleek KPI Cards */}
           <View style={styles.statsSummaryGrid}>
             <View style={[styles.statKpiCard, styles.statKpiTotal]}>
               <View style={styles.statKpiTop}>
                 <View style={[styles.statIconBadge, { backgroundColor: '#EFF6FF' }]}>
-                  <AppIcon name="business" size={14} color="#2563EB" />
+                  <AppIcon name="business" size={15} color="#2563EB" />
                 </View>
-                <Text style={styles.statKpiLabel}>{t('totalSites', 'Total Sites')}</Text>
+                <Text style={styles.statKpiLabel}>
+                  {lang === 'hi' ? 'कुल साइट्स' : 'Total Sites'}
+                </Text>
               </View>
-              <Text style={styles.statKpiValue}>{totalSitesCount}</Text>
-              <Text style={styles.statKpiFoot}>{t('allCreatedSites', 'All sites')}</Text>
-            </View>
-
-            <View style={[styles.statKpiCard, styles.statKpiActive]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                  <AppIcon name="flash" size={14} color="#16A34A" />
-                </View>
-                <Text style={[styles.statKpiLabel, { color: '#166534' }]}>{t('activeSitesCount', 'Active Sites')}</Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#15803D' }]}>{ongoingSitesCount}</Text>
-              <Text style={styles.statKpiFoot}>{t('ongoingWork', 'Ongoing work')}</Text>
-            </View>
-
-            <View style={[styles.statKpiCard, styles.statKpiContract]}>
-              <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: '#EFF6FF' }]}>
-                  <AppIcon name="receipt" size={14} color="#2563EB" />
-                </View>
-                <Text style={styles.statKpiLabel}>{t('totalValue', 'Total Value')}</Text>
-              </View>
-              <Text style={[styles.statKpiValue, { color: '#2563EB' }]} numberOfLines={1}>
-                {money(totalContractVal)}
+              <Text style={styles.statKpiValue}>
+                {ongoingSitesCount} {lang === 'hi' ? 'चालू' : 'Active'}
               </Text>
-              <Text style={styles.statKpiFoot}>{t('contractAmount', 'Contract amount')}</Text>
+              <Text style={styles.statKpiFoot}>
+                {totalSitesCount} {lang === 'hi' ? 'कुल दर्ज साइट्स' : 'Total registered'}
+              </Text>
             </View>
 
-            <View style={[styles.statKpiCard, styles.statKpiPending]}>
+            <View style={[styles.statKpiCard, totalPendingVal > 0 ? styles.statKpiPending : styles.statKpiActive]}>
               <View style={styles.statKpiTop}>
-                <View style={[styles.statIconBadge, { backgroundColor: totalPendingVal > 0 ? '#FEF3C7' : '#DCFCE7' }]}>
-                  <AppIcon name="wallet" size={14} color={totalPendingVal > 0 ? '#D97706' : '#16A34A'} />
+                <View
+                  style={[
+                    styles.statIconBadge,
+                    { backgroundColor: totalPendingVal > 0 ? '#FEF3C7' : '#DCFCE7' },
+                  ]}
+                >
+                  <AppIcon
+                    name="wallet"
+                    size={15}
+                    color={totalPendingVal > 0 ? '#D97706' : '#16A34A'}
+                  />
                 </View>
-                <Text style={[styles.statKpiLabel, { color: totalPendingVal > 0 ? '#92400E' : '#166534' }]}>
-                  {t('pendingDue', 'Pending Due')}
+                <Text
+                  style={[
+                    styles.statKpiLabel,
+                    totalPendingVal > 0 && { color: '#92400E' },
+                  ]}
+                >
+                  {lang === 'hi' ? 'लेना बाकी' : 'Pending Due'}
                 </Text>
               </View>
               <Text
@@ -849,7 +912,9 @@ export function SitesPage({
               >
                 {money(totalPendingVal)}
               </Text>
-              <Text style={styles.statKpiFoot}>{totalPendingVal > 0 ? t('toBeCollected', 'To collect') : t('allCleared', 'All clear')}</Text>
+              <Text style={styles.statKpiFoot} numberOfLines={1}>
+                {lang === 'hi' ? 'कुल ठेका:' : 'Contract:'} {money(totalContractVal)}
+              </Text>
             </View>
           </View>
 
@@ -890,13 +955,11 @@ export function SitesPage({
             })}
           </ScrollView>
 
-          {/* Sites List in Premium Single-Row Card UI */}
+          {/* Sites List in Clean, Informative Cards */}
           {filteredSites.length ? (
             <View style={styles.sitesGrid}>
               {filteredSites.map((siteItem) => {
                 const f = siteSummary(siteItem, data.attendance, data.entries);
-                const progress =
-                  f.contract > 0 ? Math.min(1, f.received / f.contract) : 0;
                 const statusTheme = getSiteStatusTheme(siteItem.status);
 
                 return (
@@ -904,138 +967,143 @@ export function SitesPage({
                     key={siteItem.id}
                     onPress={() => onSelectSite(siteItem.id)}
                     style={({ pressed }) => [
-                      styles.siteRowCard,
-                      pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
+                      styles.siteCard,
+                      pressed && styles.siteCardPressed,
                     ]}
-                    accessibilityLabel={'Open site ' + siteItem.name}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open site ${siteItem.name}`}
                   >
-                    <View
-                      style={[
-                        styles.siteRowAccent,
-                        { backgroundColor: statusTheme.accent },
-                      ]}
-                    />
+                    {/* Top Row: Icon + Name & Client/Location + Status Pill */}
+                    <View style={styles.siteCardHeader}>
+                      <View
+                        style={[
+                          styles.siteIconBox,
+                          { backgroundColor: statusTheme.bg },
+                        ]}
+                      >
+                        <AppIcon
+                          name={
+                            siteItem.work_type === 'LABOUR'
+                              ? 'hammer'
+                              : 'business'
+                          }
+                          size={19}
+                          color={statusTheme.color}
+                        />
+                      </View>
 
-                    <View style={styles.siteRowContent}>
-                      {/* Header Row: Icon + Title & Owner + Status Pill + Chevron */}
-                      <View style={styles.siteRowTop}>
-                        <View
-                          style={[
-                            styles.siteRowIconBadge,
-                            { backgroundColor: statusTheme.bg },
-                          ]}
-                        >
-                          <AppIcon
-                            name={
-                              siteItem.work_type === 'LABOUR'
-                                ? 'hammer'
-                                : 'business'
-                            }
-                            size={18}
-                            color={statusTheme.color}
-                          />
-                        </View>
-
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <View style={styles.siteRowTitleWrap}>
-                            <Text style={styles.siteRowName} numberOfLines={1}>
-                              {siteItem.name}
-                            </Text>
+                      <View style={styles.siteInfoCol}>
+                        <View style={styles.siteTitleRow}>
+                          <Text style={styles.siteNameText} numberOfLines={1}>
+                            {siteItem.name}
+                          </Text>
+                          <View
+                            style={[
+                              styles.siteStatusPill,
+                              { backgroundColor: statusTheme.badgeBg },
+                            ]}
+                          >
                             <View
                               style={[
-                                styles.siteStatusPill,
-                                { backgroundColor: statusTheme.badgeBg },
+                                styles.siteStatusDot,
+                                { backgroundColor: statusTheme.color },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.siteStatusPillText,
+                                { color: statusTheme.color },
                               ]}
                             >
-                              <View
-                                style={[
-                                  styles.siteStatusDot,
-                                  { backgroundColor: statusTheme.color },
-                                ]}
-                              />
-                              <Text
-                                style={[
-                                  styles.siteStatusPillText,
-                                  { color: statusTheme.color },
-                                ]}
-                              >
-                                {getStatusChipLabel(siteItem.status)}
-                              </Text>
-                            </View>
+                              {getStatusChipLabel(siteItem.status)}
+                            </Text>
                           </View>
                         </View>
 
-                        <View style={styles.siteRowChevron}>
-                          <AppIcon name="chevron-forward" size={16} color="#94A3B8" />
-                        </View>
+                        {/* Owner & Location Subtitle */}
+                        {(siteItem.owner_name || siteItem.location) ? (
+                          <View style={styles.siteMetaRow}>
+                            {siteItem.owner_name ? (
+                              <View style={styles.metaItem}>
+                                <AppIcon name="person" size={11} color="#64748B" />
+                                <Text style={styles.metaItemText} numberOfLines={1}>
+                                  {siteItem.owner_name}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {siteItem.owner_name && siteItem.location ? (
+                              <Text style={styles.metaDot}>•</Text>
+                            ) : null}
+                            {siteItem.location ? (
+                              <View style={styles.metaItem}>
+                                <AppIcon name="location" size={11} color="#64748B" />
+                                <Text style={styles.metaItemText} numberOfLines={1}>
+                                  {siteItem.location}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
+                    </View>
 
-                      {/* Progress Bar */}
-                      <View style={styles.siteRowProgressRow}>
-                        <View style={styles.siteRowProgressBar}>
-                          <View
-                            style={[
-                              styles.siteRowProgressFill,
-                              {
-                                width: `${Math.max(3, Math.round(progress * 100))}%`,
-                                backgroundColor: statusTheme.accent,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.siteRowProgressText}>
-                          {Math.round(progress * 100)}% {lang === 'hi' ? 'प्राप्त' : 'Recv'}
+                    {/* Financial Summary Box */}
+                    <View style={styles.finBox}>
+                      {/* Total Contract / Theka */}
+                      <View style={styles.finCol}>
+                        <Text style={styles.finLabel}>
+                          {lang === 'hi' ? 'कुल ठेका' : 'Contract'}
+                        </Text>
+                        <Text style={styles.finValContract} numberOfLines={1}>
+                          {money(f.contract)}
                         </Text>
                       </View>
 
-                      {/* 3 Metric Pills Footer */}
-                      <View style={styles.siteRowMetricsFooter}>
-                        <View style={styles.siteRowMetricCol}>
-                          <Text style={styles.siteRowMetricLabel}>{t('contract', 'Contract')}</Text>
-                          <Text style={styles.siteRowMetricVal}>
-                            {money(f.contract)}
-                          </Text>
-                        </View>
+                      <View style={styles.finDivider} />
 
-                        <View style={styles.siteRowMetricDiv} />
-
-                        <View style={styles.siteRowMetricCol}>
-                          <Text style={styles.siteRowMetricLabel}>{t('totalReceived', 'Received')}</Text>
-                          <Text
-                            style={[
-                              styles.siteRowMetricVal,
-                              { color: '#16A34A' },
-                            ]}
-                          >
-                            {money(f.received)}
-                          </Text>
-                        </View>
-
-                        <View style={styles.siteRowMetricDiv} />
-
-                        <View style={styles.siteRowMetricCol}>
-                          <Text style={styles.siteRowMetricLabel}>{t('balanceDues', 'Balance Due')}</Text>
-                          <Text
-                            style={[
-                              styles.siteRowMetricVal,
-                              {
-                                color:
-                                  f.ownerBalance > 0
-                                    ? '#D97706'
-                                    : f.ownerBalance < 0
-                                      ? '#DC2626'
-                                      : '#16A34A',
-                              },
-                            ]}
-                          >
-                            {f.ownerBalance > 0
-                              ? money(f.ownerBalance)
-                              : f.ownerBalance < 0
-                                ? `${money(-f.ownerBalance)} Adv`
-                                : (lang === 'hi' ? '₹0 हिसाब चुकता' : '₹0 Settled')}
-                          </Text>
-                        </View>
+                      {/* Received / Mila */}
+                      <View style={styles.finCol}>
+                        <Text style={styles.finLabel}>
+                          {lang === 'hi' ? 'प्राप्त हुआ' : 'Received'}
+                        </Text>
+                        <Text style={styles.finValReceived} numberOfLines={1}>
+                          {money(f.received)}
+                        </Text>
                       </View>
+
+                      <View style={styles.finDivider} />
+
+                      {/* Pending Due / Baki */}
+                      <View style={styles.finCol}>
+                        <Text style={styles.finLabel}>
+                          {lang === 'hi' ? 'लेना बाकी' : 'Balance Due'}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.finValDue,
+                            f.ownerBalance > 0
+                              ? { color: '#D97706' }
+                              : f.ownerBalance < 0
+                                ? { color: '#2563EB' }
+                                : { color: '#16A34A' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {f.ownerBalance > 0
+                            ? money(f.ownerBalance)
+                            : f.ownerBalance < 0
+                              ? `${money(-f.ownerBalance)} Adv`
+                              : (lang === 'hi' ? '₹0 चुकता' : '₹0 Settled')}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Footer Row: View Details Link */}
+                    <View style={styles.siteCardFooter}>
+                      <Text style={styles.siteFooterText}>
+                        {lang === 'hi' ? 'हिसाब व एंट्री देखने के लिए टैप करें' : 'Tap to view ledger & entries'}
+                      </Text>
+                      <AppIcon name="chevron-forward" size={14} color="#94A3B8" />
                     </View>
                   </Pressable>
                 );
@@ -1198,8 +1266,8 @@ const styles = StyleSheet.create({
   chipsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
-    flexWrap: 'wrap',
+    marginBottom: 14,
+    paddingVertical: 2,
   },
   chip: {
     paddingHorizontal: 12,
@@ -1224,58 +1292,59 @@ const styles = StyleSheet.create({
   sitesGrid: {
     gap: 12,
   },
-  siteRowCard: {
-    flexDirection: 'row',
+
+  /* Redesigned Clean Site Card */
+  siteCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    padding: 13,
+    gap: 10,
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)' } as any,
+      default: { elevation: 2 },
+    }),
   },
-  siteRowAccent: {
-    width: 5,
+  siteCardPressed: {
+    backgroundColor: '#F8FAFC',
+    opacity: 0.95,
   },
-  siteRowContent: {
-    flex: 1,
-    padding: 12,
-    gap: 8,
-  },
-  siteRowTop: {
+  siteCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
   },
-  siteRowIconBadge: {
-    width: 36,
-    height: 36,
+  siteIconBox: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  siteRowTitleWrap: {
+  siteInfoCol: {
+    flex: 1,
+    gap: 3,
+  },
+  siteTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 6,
   },
-  siteRowName: {
+  siteNameText: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
     flex: 1,
+    letterSpacing: -0.2,
   },
   siteStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 6,
   },
   siteStatusDot: {
@@ -1284,71 +1353,81 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   siteStatusPillText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800',
-    textTransform: 'capitalize',
   },
-  siteRowMeta: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  siteRowChevron: {
-    paddingLeft: 2,
-  },
-  siteRowProgressRow: {
+  siteMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 5,
   },
-  siteRowProgressBar: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#F1F5F9',
-    overflow: 'hidden',
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
-  siteRowProgressFill: {
-    height: 5,
-    borderRadius: 3,
-  },
-  siteRowProgressText: {
-    fontSize: 10,
-    fontWeight: '700',
+  metaItemText: {
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#64748B',
   },
-  siteRowMetricsFooter: {
+  metaDot: {
+    fontSize: 10,
+    color: '#CBD5E1',
+  },
+  finBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  siteRowMetricCol: {
+  finCol: {
     flex: 1,
     alignItems: 'center',
+    gap: 1,
   },
-  siteRowMetricLabel: {
-    fontSize: 9,
+  finLabel: {
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  siteRowMetricVal: {
-    fontSize: 12,
+  finValContract: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 1,
   },
-  siteRowMetricDiv: {
+  finValReceived: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#16A34A',
+  },
+  finValDue: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  finDivider: {
     width: 1,
-    height: 18,
+    height: 20,
     backgroundColor: '#E2E8F0',
+  },
+  siteCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 1,
+  },
+  siteFooterText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
   },
   // Details view styles
   backRow: {
@@ -1397,10 +1476,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   siteTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -1451,16 +1536,14 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
   editSiteBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 6,
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginTop: 2,
   },
   editSiteBtnText: {
     fontSize: 11,
@@ -1601,11 +1684,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricsGrid: {
+  metricsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
+    flexGrow: 1,
+  },
+  miniMetricCard: {
+    flex: 1,
+    minWidth: 105,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    gap: 2,
+  },
+  miniMetricContract: {
+    backgroundColor: '#FFFFFF',
+  },
+  miniMetricReceived: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  miniMetricPending: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+  },
+  miniMetricSettled: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  miniMetricProfit: {
+    backgroundColor: '#FFFFFF',
+  },
+  miniMetricLoss: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+  },
+  miniMetricTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  miniMetricLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  miniMetricValue: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   breakdownCard: {
     padding: 16,

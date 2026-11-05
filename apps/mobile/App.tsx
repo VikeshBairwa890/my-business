@@ -45,7 +45,7 @@ import {
 } from './src/pages/Entries';
 
 // API & Helpers
-import { request, commandKey, UserInfo } from './src/api';
+import { request, commandKey, UserInfo, saveCachedSnapshot, getCachedSnapshot } from './src/api';
 import { attendanceForm, entryForm, siteForm, workerForm, voidForm, today } from './src/forms';
 import { pdfReport, shareReport } from './src/report';
 import { FormSpec, Row, Snapshot } from './src/types';
@@ -57,7 +57,7 @@ import { AppLoader } from './src/components/common/AppLoader';
 function MainApp() {
   const { t, lang } = useLanguage();
   const { isLoggedIn, token, user, ready, setAuth, logout, updateUser } = useAuth();
-  const [data, setData] = useState<Snapshot | null>(null);
+  const [data, setData] = useState<Snapshot | null>(() => getCachedSnapshot());
 
   const navTabs: TabItem[] = [
     { key: 'home', label: 'Home', icon: 'home-outline' },
@@ -182,12 +182,13 @@ function MainApp() {
     }
   }, []);
 
-  async function refresh(t = token) {
+  async function refresh(t = token, silent = false) {
     if (!t) return;
-    setRefreshing(true);
+    if (!silent) setRefreshing(true);
     try {
       const snap = await request('/snapshot', t);
       setData(snap);
+      saveCachedSnapshot(snap);
       if (snap?.user || snap?.organization) {
         updateUser({
           name: snap.user?.name || user?.name || '',
@@ -202,18 +203,21 @@ function MainApp() {
       if (e.status === 401) {
         await logout();
         setData(null);
+        saveCachedSnapshot(null);
       }
     } finally {
-      setRefreshing(false);
+      if (!silent) setRefreshing(false);
     }
   }
 
   // Fetch snapshot data in the background as soon as token is ready
   useEffect(() => {
-    if (token && !data && !refreshing) {
-      refresh(token);
+    if (token) {
+      // If we already have cached data, refresh SILENTLY (no spinner blocking UI)
+      // If no data yet, show refresh spinner
+      refresh(token, Boolean(data));
     }
-  }, [token, data, refreshing]);
+  }, [token]);
 
   async function handleLogin(newToken: string, newUser?: UserInfo) {
     await setAuth(newToken, newUser || null);
@@ -224,6 +228,7 @@ function MainApp() {
       await logout();
     } finally {
       setData(null);
+      saveCachedSnapshot(null);
       setSelectedSiteId(null);
       setIsNewSite(false);
       setTab('home');
@@ -250,10 +255,12 @@ function MainApp() {
         data: form.transform(values),
       };
       const requestKey = commandKey();
-      await request('/commands', token, {
+      const res = await request('/commands', token, {
         ...body,
         key: requestKey,
       });
+
+      // Close modal immediately so user never waits!
       setForm(null);
       pendingRef.current = null;
 
@@ -292,7 +299,42 @@ function MainApp() {
       }
 
       showToast(successMsg, 's');
-      await refresh();
+
+      // Optimistic state update for instant UI response
+      if (res?.record) {
+        setData((prev) => {
+          if (!prev) return prev;
+          if (form.action.startsWith('site.')) {
+            const exists = prev.sites.some((s) => s.id === res.record.id);
+            const sites = exists
+              ? prev.sites.map((s) => (s.id === res.record.id ? { ...s, ...res.record } : s))
+              : [res.record, ...prev.sites];
+            return { ...prev, sites };
+          }
+          if (form.action.startsWith('worker.')) {
+            const exists = prev.workers.some((w) => w.id === res.record.id);
+            const workers = exists
+              ? prev.workers.map((w) => (w.id === res.record.id ? { ...w, ...res.record } : w))
+              : [...prev.workers, res.record];
+            return { ...prev, workers };
+          }
+          if (form.action === 'attendance.save') {
+            const exists = prev.attendance.some((a) => a.id === res.record.id);
+            const attendance = exists
+              ? prev.attendance.map((a) => (a.id === res.record.id ? { ...a, ...res.record } : a))
+              : [res.record, ...prev.attendance];
+            return { ...prev, attendance };
+          }
+          if (form.action === 'entry.void') {
+            const entries = prev.entries.map((e) => (e.id === res.record.id ? { ...e, ...res.record } : e));
+            return { ...prev, entries };
+          }
+          return prev;
+        });
+      }
+
+      // Silent background refresh (no blocking spinner!)
+      refresh(token, true);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -688,16 +730,32 @@ function MainApp() {
       if (pendingRef.current?.signature !== signature) {
         pendingRef.current = { signature, key: commandKey() };
       }
-      await request('/commands', token, {
+      const res = await request('/commands', token, {
         ...body,
         key: pendingRef.current.key,
       });
       pendingRef.current = null;
-      showToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully', 's');
-      await refresh();
+
+      // 1. Close entry form and return to home immediately (no waiting!)
       setActiveEntryKind(null);
       setActiveEntryParams(null);
       navigate('home', '/', null, false, null, null);
+      showToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully', 's');
+
+      // 2. Optimistic state update: inject record immediately
+      if (res?.record) {
+        setData((prev) => {
+          if (!prev) return prev;
+          const exists = prev.entries.some((e) => e.id === res.record.id);
+          const entries = exists
+            ? prev.entries.map((e) => (e.id === res.record.id ? res.record : e))
+            : [res.record, ...prev.entries];
+          return { ...prev, entries };
+        });
+      }
+
+      // 3. Silent background refresh (no spinner!)
+      refresh(token, true);
     } catch (e: any) {
       setError(e.message);
     } finally {

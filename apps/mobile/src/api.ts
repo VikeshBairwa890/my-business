@@ -287,6 +287,27 @@ export async function saveRememberedEmail(email: string | null): Promise<void> {
   } catch { }
 }
 
+const SNAPSHOT_CACHE_KEY = 'thekabook_cached_snapshot';
+
+export function saveCachedSnapshot(snap: any): void {
+  if (!snap) return;
+  try {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.setItem(SNAPSHOT_CACHE_KEY, JSON.stringify(snap));
+    }
+  } catch { }
+}
+
+export function getCachedSnapshot(): any {
+  try {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(SNAPSHOT_CACHE_KEY);
+      if (raw) return JSON.parse(raw);
+    }
+  } catch { }
+  return null;
+}
+
 export async function request(path: string, token: string | null, body?: unknown) {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path}`;

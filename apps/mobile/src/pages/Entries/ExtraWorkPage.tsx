@@ -45,10 +45,10 @@ const APPROVAL_PRESETS = [
 ];
 
 const EXTRA_STATUS_OPTIONS = [
-  { key: 'RECORD', label: 'क्लाइंट से लेना है (Bill Due)', icon: 'document-text' },
-  { key: 'CASH', label: 'नकद प्राप्त (Cash Received)', icon: 'cash' },
-  { key: 'UPI', label: 'UPI / Online Received', icon: 'card' },
-  { key: 'BANK', label: 'बैंक ट्रांसफर (Bank Received)', icon: 'business' },
+  { key: 'RECORD', label: 'Bill Due', icon: 'document-text' },
+  { key: 'CASH', label: 'Cash', icon: 'cash' },
+  { key: 'UPI', label: 'UPI', icon: 'card' },
+  { key: 'BANK', label: 'Bank', icon: 'business' },
 ];
 
 export function ExtraWorkPage({
@@ -239,11 +239,11 @@ export function ExtraWorkPage({
                   </Text>
                   <AppIcon name="chevron-down" size={14} color="#64748B" />
                   <Picker
+                    mode="dropdown"
                     selectedValue={formSiteId}
                     onValueChange={(val) => setFormSiteId(String(val))}
                     style={styles.pickerOverlay}
                     dropdownIconColor="transparent"
-                    prompt={lang === 'hi' ? 'साइट चुनें' : 'Select Work Site'}
                   >
                     {data.sites.map((s) => (
                       <Picker.Item
@@ -316,6 +316,7 @@ export function ExtraWorkPage({
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
+                      mode="dropdown"
                       selectedValue={formReference}
                       onValueChange={(val) => setFormReference(String(val))}
                       style={styles.pickerOverlay}
@@ -330,7 +331,7 @@ export function ExtraWorkPage({
 
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
                   <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'बिल स्थिति / माध्यम *' : 'Billing Status *'}
+                    {lang === 'hi' ? 'पेमेंट / बिल स्थिति *' : 'Billing Status *'}
                   </Text>
                   <View style={styles.siteBoxContainer}>
                     <AppIcon
@@ -351,6 +352,7 @@ export function ExtraWorkPage({
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
+                      mode="dropdown"
                       selectedValue={formMode}
                       onValueChange={(val) => setFormMode(String(val))}
                       style={styles.pickerOverlay}
@@ -445,9 +447,7 @@ export function ExtraWorkPage({
                     <>
                       <AppIcon name="checkmark" size={16} color="#FFFFFF" />
                       <Text style={styles.formSaveBtnText}>
-                        {formAmount
-                          ? `${lang === 'hi' ? 'एक्स्ट्रा काम जोड़ें' : 'Save'} ${money(Number(formAmount) * 100)}`
-                          : (lang === 'hi' ? 'एक्स्ट्रा काम सुरक्षित करें' : 'Save Extra Work')}
+                        {lang === 'hi' ? 'एक्स्ट्रा काम सेव करें' : 'Save Extra Work'}
                       </Text>
                     </>
                   )}
@@ -534,7 +534,7 @@ export function ExtraWorkPage({
                               isDue ? styles.billModeTextDue : styles.billModeTextPaid,
                             ]}
                           >
-                            {isDue ? (lang === 'hi' ? 'देय' : 'Due') : (item.mode || 'CASH')}
+                            {isDue ? 'Due' : (item.mode || 'CASH')}
                           </Text>
                         </View>
                       </View>

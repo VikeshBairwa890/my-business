@@ -119,26 +119,12 @@ export function WorkerDetailPage({
     () => workerAttendance.reduce((s, a) => s + Number(a.units || 0), 0),
     [workerAttendance]
   );
-  const fullDays = useMemo(
-    () => workerAttendance.filter((a) => Number(a.units) === 1).length,
-    [workerAttendance]
-  );
-  const halfDays = useMemo(
-    () => workerAttendance.filter((a) => Number(a.units) === 0.5).length,
-    [workerAttendance]
-  );
   const totalOtMinutes = useMemo(
     () => workerAttendance.reduce((s, a) => s + Number(a.overtime_minutes || 0), 0),
     [workerAttendance]
   );
   const totalOtHours = (totalOtMinutes / 60).toFixed(1).replace(/\.0$/, '');
-  const otEarnings = useMemo(() => {
-    const otRate = Number(worker.overtime_rate || 0);
-    return Math.round((totalOtMinutes * otRate) / 60);
-  }, [totalOtMinutes, worker.overtime_rate]);
 
-  const avgDayEarning =
-    totalUnits > 0 ? Math.round(summary.earned / totalUnits) : Number(worker.daily_rate || 0);
 
   const sitesBreakdown = useMemo(() => {
     const map = new Map<string, { siteName: string; days: number; earned: number }>();
@@ -189,7 +175,6 @@ export function WorkerDetailPage({
             accessibilityLabel="Edit worker"
           >
             <AppIcon name="create-outline" size={15} color="#2563EB" />
-            <Text style={styles.editBtnText}>{t('edit', 'Edit')}</Text>
           </Pressable>
         </View>
       </View>
@@ -217,45 +202,17 @@ export function WorkerDetailPage({
                   <AppIcon name={getSkillIcon(worker.skill) as any} size={11} color="#1E40AF" />
                   <Text style={styles.skillChipText}>{worker.skill || 'General Labour'}</Text>
                 </View>
-                <Text style={styles.rateChip}>{money(worker.daily_rate)}/{t('daily', 'day')}</Text>
+                {worker.phone ? (
+                  <Pressable onPress={handleCall} style={({ pressed }) => [styles.phoneChip, pressed && { opacity: 0.75 }]}>
+                    <AppIcon name="call" size={11} color="#16A34A" />
+                    <Text style={styles.phoneChipText}>{worker.phone}</Text>
+                  </Pressable>
+                ) : null}
                 {worker.overtime_rate ? (
                   <Text style={styles.otChip}>OT: {money(worker.overtime_rate)}/hr</Text>
                 ) : null}
               </View>
-              {worker.phone ? (
-                <Pressable onPress={handleCall} style={({ pressed }) => [styles.phoneRow, pressed && { opacity: 0.75 }]}>
-                  <AppIcon name="call" size={12} color="#16A34A" />
-                  <Text style={styles.phoneText}>{worker.phone}</Text>
-                  <View style={styles.callBadge}><Text style={styles.callBadgeText}>{t('call', 'Call')}</Text></View>
-                </Pressable>
-              ) : null}
             </View>
-          </View>
-          <View style={[styles.balanceRow, { backgroundColor: balanceBg, borderColor: balanceBorder }]}>
-            <View style={styles.balanceLeft}>
-              <View style={[styles.balanceDot, { backgroundColor: balanceColor }]} />
-              <View>
-                <Text style={styles.balanceLabel}>
-                  {isPending ? t('unpaidBalance', 'Unpaid Balance') : isAdvance ? t('advanceGiven', 'Advance Given') : t('accountSettled', 'Account Settled')}
-                </Text>
-                <Text style={[styles.balanceAmount, { color: balanceColor }]}>
-                  {isPending ? `${money(summary.balance)} ${t('due', 'Due')}` : isAdvance ? `${money(-summary.balance)} ${t('advance', 'Advance')}` : t('settled', 'Settled')}
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={() => onOpenPaymentModal(worker.id)}
-              style={({ pressed }) => [
-                styles.payBtn,
-                isPending ? styles.payBtnPrimary : styles.payBtnSecondary,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
-              ]}
-            >
-              <AppIcon name="wallet" size={14} color={isPending ? '#FFF' : '#2563EB'} />
-              <Text style={[styles.payBtnText, { color: isPending ? '#FFF' : '#2563EB' }]}>
-                {isPending ? t('payNow', 'Pay Now') : t('advance', 'Advance')}
-              </Text>
-            </Pressable>
           </View>
         </View>
       </View>
@@ -288,30 +245,31 @@ export function WorkerDetailPage({
       >
         {activeTab === 'OVERVIEW' ? (
           <>
-            <View style={styles.statsGrid}>
-              {[
-                { bg: '#EFF6FF', iconBg: '#DBEAFE', icon: 'calendar', iconColor: '#2563EB', value: `${totalUnits}`, unit: t('days', 'Days'), label: t('totalHaziri', 'Total Haziri'), sub: t('fullAndHalfDays', '{full} Full + {half} Half').replace('{full}', String(fullDays)).replace('{half}', String(halfDays)) },
-                { bg: '#FFFBEB', iconBg: '#FDE68A', icon: 'time', iconColor: '#D97706', value: totalOtHours || '0', unit: t('hrsOt', 'Hrs OT'), label: t('overtime', 'Overtime'), sub: t('earnedSub', '{amount} earned').replace('{amount}', money(otEarnings)) },
-                { bg: '#F0FDF4', iconBg: '#BBF7D0', icon: 'business', iconColor: '#16A34A', value: `${sitesBreakdown.length}`, unit: t('navSites', 'Sites'), label: t('sitesWorked', 'Sites Worked'), sub: t('contributed', 'Contributed') },
-                { bg: '#F5F3FF', iconBg: '#DDD6FE', icon: 'trending-up', iconColor: '#7C3AED', value: money(avgDayEarning), unit: '', label: t('avgDayRate', 'Avg Day Rate'), sub: t('inclOt', 'incl. OT') },
-              ].map((card, i) => (
-                <View key={i} style={[styles.statCard, { backgroundColor: card.bg }]}>
-                  <View style={[styles.statIconBox, { backgroundColor: card.iconBg }]}>
-                    <AppIcon name={card.icon as any} size={16} color={card.iconColor} />
-                  </View>
-                  <Text style={styles.statValue}>
-                    {card.value}
-                    {card.unit ? <Text style={styles.statUnit}> {card.unit}</Text> : null}
-                  </Text>
-                  <Text style={styles.statLabel}>{card.label}</Text>
-                  <Text style={styles.statSub}>{card.sub}</Text>
-                </View>
-              ))}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={styles.cardHeaderIcon}><AppIcon name="calendar" size={12} color="#2563EB" /></View>
+                <Text style={styles.cardTitle}>{t('attendanceSummary', 'Attendance Summary')}</Text>
+              </View>
+              <View style={styles.finGrid}>
+                {[
+                  { label: t('totalHaziri', 'Total Haziri'), value: `${totalUnits} ${t('days', 'Days')}`, color: '#2563EB' },
+                  { label: t('overtime', 'Overtime'), value: `${totalOtHours || '0'} ${t('hrsOt', 'Hrs OT')}`, color: '#D97706' },
+                  { label: t('sitesWorked', 'Sites Worked'), value: `${sitesBreakdown.length}`, color: '#16A34A' },
+                ].map((item, i, arr) => (
+                  <React.Fragment key={item.label}>
+                    <View style={styles.finItem}>
+                      <Text style={styles.finLabel}>{item.label}</Text>
+                      <Text style={[styles.finValue, { color: item.color }]}>{item.value}</Text>
+                    </View>
+                    {i < arr.length - 1 && <View style={styles.finDivider} />}
+                  </React.Fragment>
+                ))}
+              </View>
             </View>
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderIcon}><AppIcon name="cash" size={14} color="#2563EB" /></View>
+                <View style={styles.cardHeaderIcon}><AppIcon name="cash" size={12} color="#2563EB" /></View>
                 <Text style={styles.cardTitle}>{t('financialSummary', 'Financial Summary')}</Text>
               </View>
               <View style={styles.finGrid}>
@@ -333,7 +291,7 @@ export function WorkerDetailPage({
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderIcon}><AppIcon name="business" size={14} color="#2563EB" /></View>
+                <View style={styles.cardHeaderIcon}><AppIcon name="business" size={12} color="#2563EB" /></View>
                 <Text style={styles.cardTitle}>{t('siteContributions', 'Site Contributions')}</Text>
                 <View style={styles.countBadge}><Text style={styles.countBadgeText}>{sitesBreakdown.length}</Text></View>
               </View>
@@ -362,7 +320,7 @@ export function WorkerDetailPage({
         {activeTab === 'ATTENDANCE' ? (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderIcon}><AppIcon name="calendar" size={14} color="#2563EB" /></View>
+              <View style={styles.cardHeaderIcon}><AppIcon name="calendar" size={12} color="#2563EB" /></View>
               <Text style={styles.cardTitle}>{t('haziriLog', 'Haziri Log')}</Text>
               <View style={styles.countBadge}><Text style={styles.countBadgeText}>{workerAttendance.length}</Text></View>
             </View>
@@ -453,7 +411,6 @@ export function WorkerDetailPage({
                   onPress={() => onOpenPaymentModal(worker.id)}
                   style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
                 >
-                  <AppIcon name="add" size={14} color="#FFF" />
                   <Text style={styles.emptyBtnText}>{t('recordPayment', 'Record Payment')}</Text>
                 </Pressable>
               </View>
@@ -481,7 +438,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     resizeMode: 'cover',
   },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
+  editBtn: { alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
   heroWrapper: { backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', width: '100%' },
   heroCard: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 12 },
@@ -498,8 +455,8 @@ const styles = StyleSheet.create({
   skillChipText: { fontSize: 11, fontWeight: '700', color: '#1E40AF' },
   rateChip: { fontSize: 12, fontWeight: '700', color: '#475569' },
   otChip: { fontSize: 11, fontWeight: '600', color: '#D97706', backgroundColor: '#FFFBEB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, borderWidth: 1, borderColor: '#FDE68A' },
-  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
-  phoneText: { fontSize: 13, fontWeight: '600', color: '#16A34A' },
+  phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 3.5, borderRadius: 6, borderWidth: 1, borderColor: '#DCFCE7' },
+  phoneChipText: { fontSize: 11.5, fontWeight: '700', color: '#15803D' },
   callBadge: { backgroundColor: '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#BBF7D0' },
   callBadgeText: { fontSize: 10, fontWeight: '800', color: '#15803D' },
   balanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, borderWidth: 1 },
@@ -518,26 +475,19 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
   tabLabelActive: { color: '#2563EB', fontWeight: '800' },
   body: { flex: 1 },
-  bodyContent: { padding: 14, gap: 12 },
+  bodyContent: { padding: 10, gap: 10 },
   bodyContentDesktop: { maxWidth: 860, alignSelf: 'center', width: '100%' },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard: { flex: 1, minWidth: '46%', borderRadius: 14, padding: 14, gap: 3 },
-  statIconBox: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  statValue: { fontSize: 22, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
-  statUnit: { fontSize: 12, fontWeight: '600', color: '#64748B' },
-  statLabel: { fontSize: 12, fontWeight: '700', color: '#334155' },
-  statSub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  cardHeaderIcon: { width: 28, height: 28, borderRadius: 7, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: '#0F172A' },
-  countBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: '#DBEAFE' },
-  countBadgeText: { fontSize: 11, fontWeight: '800', color: '#1E40AF' },
-  finGrid: { flexDirection: 'row', alignItems: 'center', margin: 12, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 14 },
-  finItem: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
-  finLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
-  finValue: { fontSize: 15, fontWeight: '900' },
-  finDivider: { width: 1, height: 32, backgroundColor: '#E2E8F0' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 11, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  cardHeaderIcon: { width: 22, height: 22, borderRadius: 6, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { flex: 1, fontSize: 12.5, fontWeight: '700', color: '#0F172A' },
+  countBadge: { backgroundColor: '#EFF6FF', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: '#DBEAFE' },
+  countBadgeText: { fontSize: 10, fontWeight: '800', color: '#1E40AF' },
+  finGrid: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 10, marginTop: 7, marginBottom: 8, borderRadius: 8, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 8 },
+  finItem: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
+  finLabel: { fontSize: 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 },
+  finValue: { fontSize: 13.5, fontWeight: '800' },
+  finDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0' },
   siteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   siteRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   siteIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },

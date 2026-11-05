@@ -1065,11 +1065,11 @@ export function SiteFormModal({
 
                   {/* Universal Native Picker for Mobile & Web */}
                   <Picker
+                    mode="dropdown"
                     selectedValue={workType}
                     onValueChange={(val: any) => setWorkType(val as any)}
                     style={styles.nativeHiddenPicker}
                     dropdownIconColor="transparent"
-                    prompt="Select Contract Inclusions"
                   >
                     <Picker.Item label="🔨 Labour Only" value="LABOUR" />
                     <Picker.Item label="🏗️ Labour + Material" value="MATERIAL" />
