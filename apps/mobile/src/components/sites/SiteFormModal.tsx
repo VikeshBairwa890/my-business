@@ -625,6 +625,7 @@ export function SiteFormModal({
                   : 'Add a new project or construction contract'
               }
               icon="business-outline"
+              onBack={() => !busy && onClose()}
             />
           ) : (
             <View style={styles.header}>

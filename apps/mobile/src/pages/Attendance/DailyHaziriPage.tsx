@@ -13,11 +13,14 @@ import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
 import { TopNavBar } from '../../components/common/TopNavBar';
 import { CalendarPickerModal } from '../../components/common/CalendarPickerModal';
+import { VoiceAttendanceModal } from '../../components/attendance/VoiceAttendanceModal';
 import { Snapshot, Row } from '../../types';
 import { money } from '../../finance';
 import { today } from '../../forms';
 import { useLanguage } from '../../i18n';
 import { showToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { request, commandKey } from '../../api';
 
 export interface DailyHaziriPageProps {
   data: Snapshot;
@@ -72,6 +75,49 @@ export function DailyHaziriPage({
   const [statusFilter, setStatusFilter] = useState<'ALL' | '1' | '0.5' | '0' | 'UNMARKED'>('ALL');
   const [search, setSearch] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const { token } = useAuth();
+
+  const handleSaveVoiceAttendance = async (parsed: {
+    worker: Row;
+    workerId: string;
+    siteId: string;
+    date: string;
+    units: string;
+    status: 'PRESENT' | 'HALF_DAY' | 'ABSENT';
+    notes?: string;
+  }) => {
+    const wageAmount = Math.round(
+      Number(parsed.worker.daily_rate || 0) * Number(parsed.units)
+    );
+
+    const payload = {
+      action: 'attendance.save',
+      entity_id: commandKey(),
+      data: {
+        site_id: parsed.siteId || (data.sites[0]?.id ? String(data.sites[0].id) : ''),
+        worker_id: parsed.workerId,
+        date: parsed.date,
+        units: parsed.units,
+        amount: String(wageAmount),
+        overtime_minutes: '0',
+        notes: parsed.notes || 'Marked via Voice Mic',
+      },
+    };
+
+    await request('/commands', token, payload);
+    const statusLabel =
+      parsed.status === 'PRESENT'
+        ? (lang === 'hi' ? 'उपस्थित' : 'Present')
+        : parsed.status === 'HALF_DAY'
+          ? (lang === 'hi' ? 'हाफ डे' : 'Half Day')
+          : (lang === 'hi' ? 'अनुपस्थित' : 'Absent');
+    showToast(
+      `✅ ${parsed.worker.name} attendance marked (${statusLabel})!`,
+      's'
+    );
+    if (onRefresh) onRefresh();
+  };
 
   const query = search.trim().toLowerCase();
 
@@ -332,7 +378,7 @@ export function DailyHaziriPage({
             )}
           </ScrollView>
 
-          {/* 3. COMPACT SEARCH BAR */}
+          {/* 3. COMPACT SEARCH BAR WITH INTEGRATED VOICE MIC */}
           <View style={styles.searchBar}>
             <AppIcon name="search" size={15} color="#94A3B8" />
             <TextInput
@@ -347,6 +393,18 @@ export function DailyHaziriPage({
                 <AppIcon name="close-circle" size={16} color="#94A3B8" />
               </Pressable>
             ) : null}
+            <Pressable
+              onPress={() => setIsVoiceModalOpen(true)}
+              style={({ pressed }) => [
+                styles.micIconBtn,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
+              ]}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Voice Attendance Mic"
+            >
+              <AppIcon name="mic" size={17} color="#2563EB" />
+            </Pressable>
           </View>
 
           {/* 4. UNIFIED WORKER ATTENDANCE LIST (Sleek Compact Cards) */}
@@ -484,7 +542,6 @@ export function DailyHaziriPage({
                         </View>
                       ) : (
                         <View style={styles.markBtn}>
-                          <AppIcon name="add" size={13} color="#2563EB" />
                           <Text style={styles.markBtnText}>
                             {lang === 'hi' ? 'हाजिरी' : 'Mark'}
                           </Text>
@@ -513,6 +570,18 @@ export function DailyHaziriPage({
             setIsCalendarOpen(false);
           }}
           onClose={() => setIsCalendarOpen(false)}
+        />
+      )}
+
+      {/* Voice Attendance Mic Modal */}
+      {isVoiceModalOpen && (
+        <VoiceAttendanceModal
+          visible={isVoiceModalOpen}
+          onClose={() => setIsVoiceModalOpen(false)}
+          workers={activeWorkers}
+          sites={data.sites}
+          selectedDate={selectedDate}
+          onSaveAttendance={handleSaveVoiceAttendance}
         />
       )}
     </View>
@@ -661,24 +730,35 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // 3. Compact Search Bar
+  // 3. Compact Search Bar with Integrated Mic
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 9,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    height: 38,
+    paddingLeft: 10,
+    paddingRight: 6,
+    height: 40,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     color: '#0F172A',
     paddingVertical: 0,
     height: '100%',
+  },
+  micIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // 4. Total Wages Strip
@@ -860,13 +940,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   markBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'center',
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 6,
   },

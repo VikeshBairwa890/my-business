@@ -38,15 +38,15 @@ export interface ExpenseBillPageProps {
 }
 
 const EXPENSE_CATEGORIES = [
-  'Fuel & Diesel (डीजल/पेट्रोल)',
-  'Tea & Refreshment (चाय-नाश्ता)',
-  'Machine Rent (मशीन किराया)',
-  'Transport & Freight (ढुलाई/भाड़ा)',
-  'Tools & Hardware (औजार/हार्डवेयर)',
-  'Repairs & Maint. (मरम्मत)',
-  'Food & Ration (राशन/भोजन)',
-  'Electricity & Water (बिजली/पानी)',
-  'Other Site Expense (अन्य खर्च)',
+  'Fuel & Diesel',
+  'Tea & Refreshment',
+  'Machine Rent',
+  'Transport & Freight',
+  'Tools & Hardware',
+  'Repairs & Maintenance',
+  'Food & Ration',
+  'Electricity & Water',
+  'Other Site Expense',
 ];
 
 const PAYMENT_MODES = [
@@ -106,13 +106,11 @@ export function ExpenseBillPage({
   const handleSaveExpense = async () => {
     setLocalError('');
     if (!formSiteId) {
-      setLocalError(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site');
+      setLocalError('Please select a work site');
       return;
     }
     if (!formAmount || Number(formAmount) <= 0) {
-      setLocalError(
-        lang === 'hi' ? 'कृपया सही खर्च राशि भरें' : 'Please enter a valid expense amount'
-      );
+      setLocalError('Please enter a valid expense amount');
       return;
     }
 
@@ -145,7 +143,7 @@ export function ExpenseBillPage({
     onSave({
       site_id: formSiteId,
       date: formDate,
-      party: formParty.trim() || formCategory.split(' ')[0] || 'Site Expense',
+      party: formParty.trim() || formCategory || 'Site Expense',
       description: descParts.join(' • '),
       amount: formAmount,
       mode: formMode,
@@ -167,12 +165,8 @@ export function ExpenseBillPage({
     <View style={styles.pageWrapper}>
       {/* 1. TOP NAVIGATION BAR */}
       <TopNavBar
-        title={lang === 'hi' ? 'साइट खर्च (अन्य खर्च)' : 'Site Expense Register'}
-        subtitle={
-          lang === 'hi'
-            ? 'डीजल, चाय-नाश्ता, मशीन किराया, ढुलाई व मेंटेनेंस'
-            : 'Fuel, food, machine rent, freight & site overheads'
-        }
+        title="Site Expense Register"
+        subtitle="Fuel, food, machine rent, freight & site overheads"
         icon="receipt"
         userInitials={data.user?.name}
         organizationName={data.organization?.name}
@@ -204,13 +198,9 @@ export function ExpenseBillPage({
                   <AppIcon name="receipt" size={20} color="#7C3AED" />
                 </View>
                 <View>
-                  <Text style={styles.formTitle}>
-                    {lang === 'hi' ? 'साइट खर्च प्रविष्टि' : 'Site Expense Entry'}
-                  </Text>
+                  <Text style={styles.formTitle}>Site Expense Entry</Text>
                   <Text style={styles.formSubtitle}>
-                    {lang === 'hi'
-                      ? 'डीजल, मशीन किराया, चाय या अन्य फुटकर खर्च सीधे यहाँ दर्ज करें'
-                      : 'Record fuel, transport, rentals & site expenses'}
+                    Record fuel, transport, rentals & site expenses
                   </Text>
                 </View>
               </View>
@@ -227,15 +217,11 @@ export function ExpenseBillPage({
             <View style={styles.formBody}>
               {/* Site Selector */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>
-                  {lang === 'hi' ? 'कार्य स्थल (Work Site) *' : 'Work Site *'}
-                </Text>
+                <Text style={styles.inputLabel}>Work Site *</Text>
                 <View style={styles.siteBoxContainer}>
                   <AppIcon name="business" size={16} color="#0284C7" />
                   <Text style={styles.siteBoxText} numberOfLines={1}>
-                    {selectedSite
-                      ? `🏢 ${selectedSite.name}`
-                      : (lang === 'hi' ? 'साइट चुनें' : 'Select Work Site')}
+                    {selectedSite ? `🏢 ${selectedSite.name}` : 'Select Work Site'}
                   </Text>
                   <AppIcon name="chevron-down" size={14} color="#64748B" />
                   <Picker
@@ -259,13 +245,11 @@ export function ExpenseBillPage({
               {/* Category & Date Row (50% / 50%) */}
               <View style={styles.twoColRow}>
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'खर्च श्रेणी (Category) *' : 'Expense Category *'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Expense Category *</Text>
                   <View style={styles.siteBoxContainer}>
                     <AppIcon name="apps" size={16} color="#7C3AED" />
                     <Text style={styles.siteBoxText} numberOfLines={1}>
-                      {formCategory.split(' ')[0]}
+                      {formCategory}
                     </Text>
                     <AppIcon name="chevron-down" size={14} color="#64748B" />
                     <Picker
@@ -283,9 +267,7 @@ export function ExpenseBillPage({
                 </View>
 
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'खर्च दिनांक *' : 'Expense Date *'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Expense Date *</Text>
                   <Pressable
                     onPress={() => setIsCalendarOpen(true)}
                     style={styles.datePickerBtn}
@@ -299,26 +281,22 @@ export function ExpenseBillPage({
               {/* Paid To & Description Row (50% / 50%) */}
               <View style={styles.twoColRow}>
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'किसे दिया / वेंडर' : 'Paid To / Vendor'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Paid To / Vendor</Text>
                   <TextInput
                     value={formParty}
                     onChangeText={setFormParty}
-                    placeholder={lang === 'hi' ? 'उदा: भारत पेट्रोलियम, रमेश ड्राइवर' : 'e.g. Fuel Station'}
+                    placeholder="e.g. Fuel Station, Ramesh Driver"
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
                 </View>
 
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'खर्च का संक्षिप्त विवरण' : 'Expense Details'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Expense Details</Text>
                   <TextInput
                     value={formDescription}
                     onChangeText={setFormDescription}
-                    placeholder={lang === 'hi' ? 'उदा: 20L ट्रैक्टर डीजल' : 'e.g. 20L Generator Diesel'}
+                    placeholder="e.g. 20L Generator Diesel"
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
@@ -329,9 +307,7 @@ export function ExpenseBillPage({
               <View style={styles.twoColRow}>
                 {/* 1. Paid Amount Card */}
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'खर्च राशि (₹) *' : 'Expense Amount (₹) *'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Expense Amount (₹) *</Text>
                   <View style={styles.amountBoxContainer}>
                     <Text style={[styles.amountCurrencyPrefix, { color: '#7C3AED' }]}>₹</Text>
                     <TextInput
@@ -347,9 +323,7 @@ export function ExpenseBillPage({
 
                 {/* 2. Payment Mode Dropdown Card */}
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'भुगतान मोड *' : 'Payment Mode *'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Payment Mode *</Text>
                   <View style={styles.siteBoxContainer}>
                     <AppIcon
                       name={
@@ -388,9 +362,7 @@ export function ExpenseBillPage({
               {/* Bill # / Voucher # & Notes Row (50% / 50%) */}
               <View style={styles.twoColRow}>
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'बिल / वाउचर संख्या' : 'Bill # / Voucher #'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Bill # / Voucher #</Text>
                   <TextInput
                     value={formRef}
                     onChangeText={setFormRef}
@@ -401,13 +373,11 @@ export function ExpenseBillPage({
                 </View>
 
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 0, width: '50%', maxWidth: '50%' }]}>
-                  <Text style={styles.inputLabel}>
-                    {lang === 'hi' ? 'टिप्पणी / संदर्भ' : 'Notes / Remarks'}
-                  </Text>
+                  <Text style={styles.inputLabel}>Notes / Remarks</Text>
                   <TextInput
                     value={formNotes}
                     onChangeText={setFormNotes}
-                    placeholder={lang === 'hi' ? 'उदा: मिक्सर मशीन हेतु' : 'e.g. For foundation casting'}
+                    placeholder="e.g. For foundation casting"
                     placeholderTextColor="#94A3B8"
                     style={styles.textInput}
                   />
@@ -445,9 +415,7 @@ export function ExpenseBillPage({
                   }}
                   style={styles.formCancelBtn}
                 >
-                  <Text style={styles.formCancelBtnText}>
-                    {lang === 'hi' ? 'साफ़ करें' : 'Clear'}
-                  </Text>
+                  <Text style={styles.formCancelBtnText}>Clear</Text>
                 </Pressable>
 
                 <Pressable
@@ -460,9 +428,7 @@ export function ExpenseBillPage({
                   ) : (
                     <>
                       <AppIcon name="checkmark" size={16} color="#FFFFFF" />
-                      <Text style={styles.formSaveBtnText}>
-                        {lang === 'hi' ? 'खर्च सेव करें' : 'Save Expense'}
-                      </Text>
+                      <Text style={styles.formSaveBtnText}>Save Expense</Text>
                     </>
                   )}
                 </Pressable>
@@ -478,14 +444,8 @@ export function ExpenseBillPage({
                   <AppIcon name="receipt" size={16} color="#7C3AED" />
                 </View>
                 <View>
-                  <Text style={styles.recentTitle}>
-                    {lang === 'hi' ? 'हाल ही के साइट खर्च' : 'Recent Site Expenses'}
-                  </Text>
-                  <Text style={styles.recentSubtitle}>
-                    {lang === 'hi'
-                      ? 'अंतिम 10 साइट खर्च प्रविष्टियाँ'
-                      : 'Last 10 recorded expenses'}
-                  </Text>
+                  <Text style={styles.recentTitle}>Recent Site Expenses</Text>
+                  <Text style={styles.recentSubtitle}>Last 10 recorded expenses</Text>
                 </View>
               </View>
               <View style={[styles.badgePill, { backgroundColor: '#F3E8FF' }]}>
@@ -496,13 +456,9 @@ export function ExpenseBillPage({
             {recentExpenses.length === 0 ? (
               <View style={styles.emptyStateBox}>
                 <AppIcon name="receipt-outline" size={32} color="#CBD5E1" />
-                <Text style={styles.emptyStateTitle}>
-                  {lang === 'hi' ? 'कोई साइट खर्च दर्ज नहीं है' : 'No expenses recorded yet'}
-                </Text>
+                <Text style={styles.emptyStateTitle}>No expenses recorded yet</Text>
                 <Text style={styles.emptyStateSubtitle}>
-                  {lang === 'hi'
-                    ? 'ऊपर दिए गए फ़ॉर्म से पहला खर्च दर्ज करें'
-                    : 'Use the form above to add your first expense'}
+                  Use the form above to add your first expense
                 </Text>
               </View>
             ) : (
@@ -510,6 +466,8 @@ export function ExpenseBillPage({
                 {recentExpenses.map((exp) => {
                   const site = data.sites.find((s) => s.id === exp.site_id);
                   const isDue = exp.mode === 'RECORD';
+                  const displayDesc = (exp.description || 'Site Expense').replace(/\s*\([\u0900-\u097F\/\s-]+\)/g, '');
+                  const displayParty = (exp.party || 'Expense').replace(/\s*\([\u0900-\u097F\/\s-]+\)/g, '');
 
                   return (
                     <View key={exp.id} style={styles.billItemRow}>
@@ -519,11 +477,11 @@ export function ExpenseBillPage({
                         </View>
                         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                           <Text style={styles.billItemDesc} numberOfLines={1}>
-                            {exp.description || 'Site Expense'}
+                            {displayDesc}
                           </Text>
                           <View style={styles.billItemMetaRow}>
                             <Text style={styles.billItemParty} numberOfLines={1}>
-                              🏢 {site?.name || 'Site'} • {exp.party || 'Expense'}
+                              🏢 {site?.name || 'Site'} • {displayParty}
                             </Text>
                             <Text style={styles.billItemDate}>
                               • {String(exp.date).slice(0, 10)}
@@ -565,7 +523,7 @@ export function ExpenseBillPage({
       {isCalendarOpen && (
         <CalendarPickerModal
           visible={isCalendarOpen}
-          title={lang === 'hi' ? 'खर्च दिनांक चुनें' : 'Select Expense Date'}
+          title="Select Expense Date"
           selectedDate={formDate}
           onSelect={(d) => {
             if (d) setFormDate(d);

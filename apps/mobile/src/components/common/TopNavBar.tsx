@@ -90,6 +90,7 @@ export function TopNavBar({
           style={({ pressed }) => [styles.backBtn, pressed && styles.btnPressed]}
           accessibilityRole="button"
           accessibilityLabel="Back"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <AppIcon name="arrow-back" size={20} color="#0F172A" />
         </Pressable>
@@ -105,6 +106,7 @@ export function TopNavBar({
         style={({ pressed }) => [styles.backBtn, pressed && styles.btnPressed]}
         accessibilityRole="button"
         accessibilityLabel="Back"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <AppIcon name="arrow-back" size={20} color="#0F172A" />
       </Pressable>

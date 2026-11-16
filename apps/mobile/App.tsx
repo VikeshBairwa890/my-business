@@ -945,6 +945,7 @@ function MainApp() {
                   onOpenAttendance={openAttendanceModal}
                   onShareReport={(sId) => handleShareReport(false, sId)}
                   onOpenProfile={() => handleNavigate('profile')}
+                  onBack={() => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -988,6 +989,7 @@ function MainApp() {
                     openEntryModal('WAGE_PAYMENT', undefined, wId)
                   }
                   onOpenProfile={() => handleNavigate('profile')}
+                  onBack={() => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -999,6 +1001,7 @@ function MainApp() {
                   onOpenEntry={openEntryModal}
                   onOpenVoidModal={(entry) => openForm(voidForm(entry))}
                   onOpenProfile={() => handleNavigate('profile')}
+                  onBack={() => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -1009,6 +1012,7 @@ function MainApp() {
                   data={data}
                   onGenerateReport={handleShareReport}
                   onOpenProfile={() => handleNavigate('profile')}
+                  onBack={() => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />

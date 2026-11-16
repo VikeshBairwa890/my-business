@@ -168,6 +168,17 @@ export function WorkerDetailPage({
     <SafeAreaView style={styles.pageRoot} edges={['top', 'bottom']}>
       <View style={styles.topBarWrapper}>
         <View style={[styles.topBar, isDesktop && styles.topBarDesktop]}>
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <AppIcon name="arrow-back" size={20} color="#0F172A" />
+            </Pressable>
+          ) : null}
           <Text style={styles.topBarTitle} numberOfLines={1}>{t('workerProfile', 'Worker Profile')}</Text>
           <Pressable
             onPress={() => onOpenWorkerModal(worker)}
@@ -430,6 +441,17 @@ const styles = StyleSheet.create({
   topBarWrapper: { backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', width: '100%' },
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
   topBarDesktop: { maxWidth: 860, alignSelf: 'center', width: '100%' },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
   topBarTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 },
 
   avatarImg: {
