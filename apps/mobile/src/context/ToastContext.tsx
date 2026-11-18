@@ -34,8 +34,8 @@ export interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType>({
-  showToast: () => {},
-  hideToast: () => {},
+  showToast: () => { },
+  hideToast: () => { },
 });
 
 // Singleton reference for global (non-hook) usage anywhere in the codebase
@@ -61,7 +61,7 @@ export function useToast() {
   if (!context) {
     return {
       showToast,
-      hideToast: () => {},
+      hideToast: () => { },
     };
   }
   return context;
@@ -94,7 +94,7 @@ function normalizeType(type?: ToastType, message?: string): NormalizedToastType 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<ToastItem | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(-24)).current;
   const hideTimerRef = useRef<any>(null);
 
   const hideToast = useCallback(() => {
@@ -106,12 +106,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 180,
         useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(slideAnim, {
-        toValue: 15,
-        duration: 200,
+        toValue: -20,
+        duration: 180,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
@@ -139,18 +139,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       setToast(newToast);
 
       fadeAnim.setValue(0);
-      slideAnim.setValue(20);
+      slideAnim.setValue(-24);
 
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 250,
+          duration: 220,
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
           friction: 8,
-          tension: 70,
+          tension: 75,
           useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
@@ -191,7 +191,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             ]}
           >
             <View style={styles.contentRow}>
-              {/* Status Icon */}
               <View
                 style={[
                   styles.iconWrap,
@@ -224,12 +223,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 />
               </View>
 
-              {/* Toast Message */}
               <Text style={styles.toastText} numberOfLines={2}>
                 {toast.message}
               </Text>
 
-              {/* Tap to dismiss cross */}
               <Pressable
                 onPress={hideToast}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -248,12 +245,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   floatingOverlay: {
     position: 'absolute',
-    bottom: 84, // Positioned safely above the bottom navigation bar
+    top: Platform.OS === 'web' ? 16 : 50,
     left: 0,
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999999,
+    elevation: 999,
   },
   toastCard: {
     maxWidth: 540,

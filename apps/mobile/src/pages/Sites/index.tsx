@@ -828,7 +828,6 @@ export function SitesPage({
     <View style={styles.pageWrapper}>
       <TopNavBar
         title={t('sitesTitle', 'Work Sites')}
-        subtitle={t('sitesSubtitle', 'Manage construction sites, theke & contract ledger')}
         userInitials={data.user.name}
         organizationName={data.organization.name}
         onOpenProfile={onOpenProfile}
@@ -1924,4 +1923,5 @@ const styles = StyleSheet.create({
 });
 
 export { NewSitePage } from './NewSitePage';
+export { EditSitePage } from './EditSitePage';
 

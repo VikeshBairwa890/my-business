@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
-  Modal,
   Image,
   SafeAreaView,
 } from 'react-native';
@@ -27,11 +26,12 @@ export interface BulkAttendancePageProps {
   siteId?: string;
   onBack: () => void;
   onRefresh?: () => void;
+  onBulkAttendanceSaved?: (records: Row[]) => void;
   refreshing?: boolean;
 }
 
 type AttendanceStatus = 'PRESENT' | 'HALF_DAY' | 'ABSENT';
-type AttendanceFilterTab = 'PENDING' | 'MARKED' | 'ALL' | 'PRESENT' | 'ABSENT' | 'HALF_DAY';
+type AttendanceFilterTab = 'ALL' | 'PRESENT' | 'HALF_DAY' | 'ABSENT';
 
 // Format date to match format: e.g. "Thu, 23 Oct 2025"
 const formatScreenshotDate = (dateStr: string): string => {
@@ -55,6 +55,7 @@ export function BulkAttendancePage({
   siteId,
   onBack,
   onRefresh,
+  onBulkAttendanceSaved,
   refreshing = false,
 }: BulkAttendancePageProps) {
   const { t } = useLanguage();
@@ -73,18 +74,17 @@ export function BulkAttendancePage({
   // Selected Date (defaults to today)
   const [selectedDate, setSelectedDate] = useState<string>(today());
 
-  // Locally marked worker IDs in this session
-  const [locallyMarkedWorkerIds, setLocallyMarkedWorkerIds] = useState<Set<string>>(new Set());
+  // Locally saved status in this session (workerId -> AttendanceStatus)
+  const [locallySavedStatus, setLocallySavedStatus] = useState<Record<string, AttendanceStatus>>({});
 
-  // Active Filter Tab: 'PENDING' | 'MARKED' | 'ALL' | 'PRESENT' | 'ABSENT' | 'HALF_DAY'
-  const [activeFilter, setActiveFilter] = useState<AttendanceFilterTab>('PENDING');
+  // Active Filter Tab: 'ALL' | 'PRESENT' | 'HALF_DAY' | 'ABSENT'
+  const [activeFilter, setActiveFilter] = useState<AttendanceFilterTab>('ALL');
 
   // Modals state
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Overtime / Notes modal state for specific worker
-  const [editingWorkerId, setEditingWorkerId] = useState<string | null>(null);
+  // Preserve existing overtime/notes when updating an already-marked worker
   const [overtimeMinutes, setOvertimeMinutes] = useState<Record<string, number>>({});
   const [workerNotes, setWorkerNotes] = useState<Record<string, string>>({});
 
@@ -102,54 +102,50 @@ export function BulkAttendancePage({
   const [workerStatus, setWorkerStatus] = useState<Record<string, AttendanceStatus>>({});
   const [initialStatusSnapshot, setInitialStatusSnapshot] = useState<Record<string, AttendanceStatus>>({});
 
-  // Reset local marked workers when site or date changes
+  // Reset local saved statuses when site or date changes
   useEffect(() => {
-    setLocallyMarkedWorkerIds(new Set());
+    setLocallySavedStatus({});
   }, [selectedSiteId, selectedDate]);
 
-  // Set of worker IDs that already have an attendance record for this site & date
-  const markedWorkerIdSet = useMemo(() => {
-    const set = new Set<string>();
+  // Map of truly marked/saved worker statuses for this site & date (unmarked workers are NOT in this map)
+  const savedStatusByWorker = useMemo(() => {
+    const map: Record<string, AttendanceStatus> = {};
     (data.attendance || []).forEach((a) => {
       if (
         a.site_id === selectedSiteId &&
         String(a.date).slice(0, 10) === selectedDate
       ) {
-        set.add(a.worker_id);
+        const u = Number(a.units);
+        map[a.worker_id] = u === 1 ? 'PRESENT' : u === 0.5 ? 'HALF_DAY' : 'ABSENT';
       }
     });
-    locallyMarkedWorkerIds.forEach((id) => set.add(id));
-    return set;
-  }, [data.attendance, selectedSiteId, selectedDate, locallyMarkedWorkerIds]);
+    Object.entries(locallySavedStatus).forEach(([wId, st]) => {
+      map[wId] = st;
+    });
+    return map;
+  }, [data.attendance, selectedSiteId, selectedDate, locallySavedStatus]);
 
-  // Pending vs Marked worker lists
-  const pendingWorkers = useMemo(() => {
-    return activeWorkers.filter((w) => !markedWorkerIdSet.has(w.id));
-  }, [activeWorkers, markedWorkerIdSet]);
+  // Set of worker IDs that already have an attendance record for this site & date
+  const markedWorkerIdSet = useMemo(() => {
+    return new Set(Object.keys(savedStatusByWorker));
+  }, [savedStatusByWorker]);
 
-  const markedWorkers = useMemo(() => {
-    return activeWorkers.filter((w) => markedWorkerIdSet.has(w.id));
-  }, [activeWorkers, markedWorkerIdSet]);
-
-  // Automatically adjust default filter when site/date changes
+  // Reset filter to ALL when site or date changes
   useEffect(() => {
-    if (pendingWorkers.length === 0 && markedWorkers.length > 0) {
-      setActiveFilter('ALL');
-    } else {
-      setActiveFilter('PENDING');
-    }
-  }, [selectedSiteId, selectedDate, pendingWorkers.length, markedWorkers.length]);
+    setActiveFilter('ALL');
+  }, [selectedSiteId, selectedDate]);
 
   // Set of selected worker IDs (for the checkbox on the left)
   const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(() => {
     return new Set(activeWorkers.map((w) => w.id));
   });
 
-  // Load existing records whenever selectedSiteId or selectedDate changes
+  // Load existing records whenever selectedSiteId, selectedDate, or server attendance changes
   useEffect(() => {
     const statusMap: Record<string, AttendanceStatus> = {};
     const otMap: Record<string, number> = {};
     const notesMap: Record<string, string> = {};
+    const recordedIds = new Set<string>();
 
     activeWorkers.forEach((w) => {
       const record = (data.attendance || []).find(
@@ -160,6 +156,7 @@ export function BulkAttendancePage({
       );
 
       if (record) {
+        recordedIds.add(w.id);
         if (Number(record.units) === 1) {
           statusMap[w.id] = 'PRESENT';
         } else if (Number(record.units) === 0.5) {
@@ -182,45 +179,49 @@ export function BulkAttendancePage({
     setWorkerNotes(notesMap);
 
     // If there are pending workers, select only pending workers by default
-    const unrecordedWorkers = activeWorkers.filter((w) => !markedWorkerIdSet.has(w.id));
+    const unrecordedWorkers = activeWorkers.filter((w) => !recordedIds.has(w.id));
     if (unrecordedWorkers.length > 0) {
       setSelectedWorkerIds(new Set(unrecordedWorkers.map((w) => w.id)));
     } else {
       setSelectedWorkerIds(new Set(activeWorkers.map((w) => w.id)));
     }
-  }, [selectedSiteId, selectedDate, data.attendance, activeWorkers, markedWorkerIdSet]);
+  }, [selectedSiteId, selectedDate, data.attendance, activeWorkers]);
 
-  // Count metrics for the filter tabs
+  // Count metrics for the filter tabs (ONLY truly marked/saved workers count in Present/Absent/Half Day)
   const allCount = activeWorkers.length;
-  const pendingCount = pendingWorkers.length;
-  const markedCount = markedWorkers.length;
 
   const presentCount = useMemo(() => {
-    return activeWorkers.filter((w) => (workerStatus[w.id] || 'PRESENT') === 'PRESENT').length;
-  }, [activeWorkers, workerStatus]);
+    return activeWorkers.filter((w) => savedStatusByWorker[w.id] === 'PRESENT').length;
+  }, [activeWorkers, savedStatusByWorker]);
 
   const absentCount = useMemo(() => {
-    return activeWorkers.filter((w) => workerStatus[w.id] === 'ABSENT').length;
-  }, [activeWorkers, workerStatus]);
+    return activeWorkers.filter((w) => savedStatusByWorker[w.id] === 'ABSENT').length;
+  }, [activeWorkers, savedStatusByWorker]);
 
   const halfDayCount = useMemo(() => {
-    return activeWorkers.filter((w) => workerStatus[w.id] === 'HALF_DAY').length;
-  }, [activeWorkers, workerStatus]);
+    return activeWorkers.filter((w) => savedStatusByWorker[w.id] === 'HALF_DAY').length;
+  }, [activeWorkers, savedStatusByWorker]);
 
-  // Filtered workers list based on active tab
+  // Filtered workers list based on active tab (unmarked/pending workers float to top in ALL)
   const displayedWorkers = useMemo(() => {
-    return activeWorkers.filter((w) => {
-      const isMarked = markedWorkerIdSet.has(w.id);
-      const status = workerStatus[w.id] || 'PRESENT';
+    const filtered = activeWorkers.filter((w) => {
+      const savedStatus = savedStatusByWorker[w.id];
 
-      if (activeFilter === 'PENDING') return !isMarked;
-      if (activeFilter === 'MARKED') return isMarked;
-      if (activeFilter === 'PRESENT') return status === 'PRESENT';
-      if (activeFilter === 'ABSENT') return status === 'ABSENT';
-      if (activeFilter === 'HALF_DAY') return status === 'HALF_DAY';
+      if (activeFilter === 'PRESENT') return savedStatus === 'PRESENT';
+      if (activeFilter === 'ABSENT') return savedStatus === 'ABSENT';
+      if (activeFilter === 'HALF_DAY') return savedStatus === 'HALF_DAY';
       return true;
     });
-  }, [activeWorkers, workerStatus, activeFilter, markedWorkerIdSet]);
+
+    if (activeFilter === 'ALL') {
+      return [...filtered].sort((a, b) => {
+        const aMarked = savedStatusByWorker[a.id] ? 1 : 0;
+        const bMarked = savedStatusByWorker[b.id] ? 1 : 0;
+        return aMarked - bMarked;
+      });
+    }
+    return filtered;
+  }, [activeWorkers, savedStatusByWorker, activeFilter]);
 
   // Toggle selection for a single worker
   const handleToggleWorker = (workerId: string) => {
@@ -236,10 +237,14 @@ export function BulkAttendancePage({
   };
 
   // Toggle Select All for currently displayed workers
+  const selectedDisplayedWorkers = useMemo(() => {
+    return displayedWorkers.filter((w) => selectedWorkerIds.has(w.id));
+  }, [displayedWorkers, selectedWorkerIds]);
+
   const isAllDisplayedSelected = useMemo(() => {
     if (displayedWorkers.length === 0) return false;
-    return displayedWorkers.every((w) => selectedWorkerIds.has(w.id));
-  }, [displayedWorkers, selectedWorkerIds]);
+    return selectedDisplayedWorkers.length === displayedWorkers.length;
+  }, [displayedWorkers, selectedDisplayedWorkers]);
 
   const handleToggleSelectAll = () => {
     if (isAllDisplayedSelected) {
@@ -271,17 +276,17 @@ export function BulkAttendancePage({
       }
       return { ...prev, [workerId]: next };
     });
+    // Auto-check edited worker so their status change gets saved
+    setSelectedWorkerIds((prev) => {
+      if (prev.has(workerId)) return prev;
+      const next = new Set(prev);
+      next.add(workerId);
+      return next;
+    });
   };
 
-  // Check if any status has changed compared to initial
-  const hasChanges = useMemo(() => {
-    return activeWorkers.some(
-      (w) => (workerStatus[w.id] || 'PRESENT') !== (initialStatusSnapshot[w.id] || 'PRESENT')
-    );
-  }, [activeWorkers, workerStatus, initialStatusSnapshot]);
-
-  // Save attendance to backend
-  const handleSaveAttendance = async (forceAllPresent = false) => {
+  // Save attendance to backend (strictly ONLY for checked/selected workers)
+  const handleSaveAttendance = async () => {
     if (!token) {
       showToast('Please login to save attendance', 'w');
       return;
@@ -291,13 +296,10 @@ export function BulkAttendancePage({
       return;
     }
 
-    const pool = activeFilter === 'PENDING' ? pendingWorkers : activeWorkers;
-    const targets = forceAllPresent
-      ? pool
-      : pool.filter((w) => selectedWorkerIds.has(w.id));
+    const targets = selectedDisplayedWorkers;
 
     if (targets.length === 0) {
-      showToast('Please select at least one worker to mark attendance', 'w');
+      showToast('Please tick at least one worker to save attendance', 'w');
       return;
     }
 
@@ -308,56 +310,82 @@ export function BulkAttendancePage({
 
     setIsSaving(true);
     try {
-      for (const worker of targets) {
-        const status = forceAllPresent ? 'PRESENT' : workerStatus[worker.id] || 'PRESENT';
+      const items = targets.map((worker) => {
+        const status = workerStatus[worker.id] || 'PRESENT';
         const units = status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0;
-        const ot = overtimeMinutes[worker.id] || 0;
+        const ot = status === 'ABSENT' ? 0 : overtimeMinutes[worker.id] || 0;
         const notes = workerNotes[worker.id] || '';
+        return {
+          worker_id: worker.id,
+          units,
+          overtime_minutes: ot,
+          notes,
+        };
+      });
 
-        const payload = {
-          action: 'attendance.save',
+      let savedRecords: Row[] = [];
+
+      try {
+        // Single atomic batch API call (10x faster than per-worker sequential calls)
+        const bulkRes = await request('/commands', token, {
+          action: 'attendance.bulkSave',
           data: {
             site_id: selectedSiteId,
-            worker_id: worker.id,
             date: selectedDate,
-            units,
-            overtime_minutes: ot,
-            notes,
+            items,
           },
           key: commandKey(),
-        };
-
-        await request('/commands', token, payload);
+        });
+        if (Array.isArray(bulkRes?.records)) {
+          savedRecords = bulkRes.records;
+        }
+      } catch (bulkErr: any) {
+        // Graceful fallback if connected to an older deployed API that doesn't support bulkSave yet
+        if (bulkErr?.status === 400) {
+          const results = await Promise.all(
+            items.map((item) =>
+              request('/commands', token, {
+                action: 'attendance.save',
+                data: {
+                  site_id: selectedSiteId,
+                  worker_id: item.worker_id,
+                  date: selectedDate,
+                  units: item.units,
+                  overtime_minutes: item.overtime_minutes,
+                  notes: item.notes,
+                },
+                key: commandKey(),
+              })
+            )
+          );
+          savedRecords = results.map((r) => r?.record).filter(Boolean);
+        } else {
+          throw bulkErr;
+        }
       }
 
-      // Add saved targets to local marked set so pending list updates immediately
-      setLocallyMarkedWorkerIds((prev) => {
-        const next = new Set(prev);
-        targets.forEach((w) => next.add(w.id));
+      // Record saved statuses locally so tabs & counts update immediately
+      setLocallySavedStatus((prev) => {
+        const next = { ...prev };
+        targets.forEach((w) => {
+          next[w.id] = workerStatus[w.id] || 'PRESENT';
+        });
         return next;
       });
 
-      if (forceAllPresent) {
-        const allPresentMap: Record<string, AttendanceStatus> = {};
-        activeWorkers.forEach((w) => {
-          allPresentMap[w.id] = 'PRESENT';
-        });
-        setWorkerStatus(allPresentMap);
-        setInitialStatusSnapshot(allPresentMap);
-      } else {
-        setInitialStatusSnapshot({ ...workerStatus });
+      setInitialStatusSnapshot({ ...workerStatus });
+
+      if (savedRecords.length > 0 && onBulkAttendanceSaved) {
+        onBulkAttendanceSaved(savedRecords);
+      } else if (onRefresh) {
+        // Silent/non-blocking refresh so user doesn't wait for full snapshot
+        onRefresh();
       }
 
       showToast(
-        forceAllPresent
-          ? `All ${targets.length} workers marked Present successfully!`
-          : `Attendance saved for ${targets.length} workers successfully!`,
+        `Attendance saved for ${targets.length} selected worker${targets.length > 1 ? 's' : ''}!`,
         's'
       );
-
-      if (onRefresh) {
-        await onRefresh();
-      }
     } catch (err: any) {
       showToast(err.message || 'Failed to save attendance', 'e');
     } finally {
@@ -428,57 +456,13 @@ export function BulkAttendancePage({
           <Ionicons name="chevron-down" size={16} color="#64748B" />
         </Pressable>
 
-        {/* FILTER TABS ROW (SCROLLABLE STRIP) */}
+        {/* FILTER TABS ROW (4 Clean Tabs) */}
         <View style={styles.filterTabsWrapper}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterTabsScroll}
           >
-            {/* Pending Tab */}
-            <Pressable
-              style={[
-                styles.filterTabPill,
-                activeFilter === 'PENDING'
-                  ? styles.filterTabPillPendingActive
-                  : styles.filterTabPillInactive,
-              ]}
-              onPress={() => setActiveFilter('PENDING')}
-            >
-              <Text
-                style={[
-                  styles.filterTabLabel,
-                  activeFilter === 'PENDING'
-                    ? styles.filterTabLabelPendingActive
-                    : styles.filterTabLabelInactive,
-                ]}
-              >
-                Pending ({pendingCount})
-              </Text>
-            </Pressable>
-
-            {/* Marked Tab */}
-            <Pressable
-              style={[
-                styles.filterTabPill,
-                activeFilter === 'MARKED'
-                  ? styles.filterTabPillMarkedActive
-                  : styles.filterTabPillInactive,
-              ]}
-              onPress={() => setActiveFilter('MARKED')}
-            >
-              <Text
-                style={[
-                  styles.filterTabLabel,
-                  activeFilter === 'MARKED'
-                    ? styles.filterTabLabelMarkedActive
-                    : styles.filterTabLabelInactive,
-                ]}
-              >
-                Marked ({markedCount})
-              </Text>
-            </Pressable>
-
             {/* All Tab */}
             <Pressable
               style={[
@@ -515,24 +499,6 @@ export function BulkAttendancePage({
               </Text>
             </Pressable>
 
-            {/* Absent Tab */}
-            <Pressable
-              style={[
-                styles.filterTabPill,
-                activeFilter === 'ABSENT' ? styles.filterTabPillActive : styles.filterTabPillInactive,
-              ]}
-              onPress={() => setActiveFilter('ABSENT')}
-            >
-              <Text
-                style={[
-                  styles.filterTabLabel,
-                  activeFilter === 'ABSENT' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
-                ]}
-              >
-                Absent ({absentCount})
-              </Text>
-            </Pressable>
-
             {/* Half Day Tab */}
             <Pressable
               style={[
@@ -548,6 +514,24 @@ export function BulkAttendancePage({
                 ]}
               >
                 Half Day ({halfDayCount})
+              </Text>
+            </Pressable>
+
+            {/* Absent Tab */}
+            <Pressable
+              style={[
+                styles.filterTabPill,
+                activeFilter === 'ABSENT' ? styles.filterTabPillActive : styles.filterTabPillInactive,
+              ]}
+              onPress={() => setActiveFilter('ABSENT')}
+            >
+              <Text
+                style={[
+                  styles.filterTabLabel,
+                  activeFilter === 'ABSENT' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
+                ]}
+              >
+                Absent ({absentCount})
               </Text>
             </Pressable>
           </ScrollView>
@@ -575,10 +559,6 @@ export function BulkAttendancePage({
                 Select All ({displayedWorkers.length})
               </Text>
             </Pressable>
-
-            <Text style={styles.selectedCountBadge}>
-              {selectedWorkerIds.size} selected
-            </Text>
           </View>
         )}
 
@@ -588,36 +568,12 @@ export function BulkAttendancePage({
           contentContainerStyle={styles.workerListContent}
           showsVerticalScrollIndicator={false}
         >
-          {activeFilter === 'PENDING' && pendingCount === 0 ? (
-            /* ALL ATTENDANCE MARKED CELEBRATION CARD */
-            <View style={styles.allMarkedCard}>
-              <View style={styles.allMarkedIconCircle}>
-                <Ionicons name="checkmark-done-circle" size={48} color="#16A34A" />
-              </View>
-              <Text style={styles.allMarkedTitle}>All Attendance Marked!</Text>
-              <Text style={styles.allMarkedSub}>
-                {markedCount > 0
-                  ? `All ${markedCount} active workers have their attendance recorded for ${formatScreenshotDate(selectedDate)} at ${currentSite?.name || 'this site'}.`
-                  : 'No active workers found for this site.'}
-              </Text>
-              {markedCount > 0 && (
-                <Pressable
-                  style={styles.viewMarkedButton}
-                  onPress={() => setActiveFilter('MARKED')}
-                >
-                  <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.viewMarkedButtonText}>
-                    View Marked Workers ({markedCount})
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          ) : displayedWorkers.length === 0 ? (
+          {displayedWorkers.length === 0 ? (
             <View style={styles.emptyListContainer}>
               <Ionicons name="people-outline" size={48} color="#94A3B8" />
-              <Text style={styles.emptyListTitle}>No workers match this filter</Text>
+              <Text style={styles.emptyListTitle}>No workers in this filter</Text>
               <Text style={styles.emptyListSub}>
-                Try switching to the 'All' or 'Marked' tab.
+                Switch to the 'All' tab to view or mark attendance.
               </Text>
             </View>
           ) : (
@@ -625,10 +581,9 @@ export function BulkAttendancePage({
               const isSelected = selectedWorkerIds.has(worker.id);
               const status = workerStatus[worker.id] || 'PRESENT';
               const isAlreadyMarked = markedWorkerIdSet.has(worker.id);
-              const ot = overtimeMinutes[worker.id] || 0;
 
               return (
-                <View key={worker.id} style={styles.workerRow}>
+                <View key={worker.id} style={[styles.workerRow, !isSelected && styles.workerRowUnselected]}>
                   {/* Left Checkbox */}
                   <Pressable
                     style={styles.rowCheckboxArea}
@@ -676,31 +631,27 @@ export function BulkAttendancePage({
                   {/* Worker Info */}
                   <Pressable
                     style={styles.workerInfoCol}
-                    onPress={() => setEditingWorkerId(worker.id)}
+                    onPress={() => handleToggleWorker(worker.id)}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={styles.workerNameText} numberOfLines={1}>
                         {worker.name}
                       </Text>
-                      {isAlreadyMarked && (
+                      {isAlreadyMarked ? (
                         <View style={styles.markedBadge}>
                           <Text style={styles.markedBadgeText}>Saved</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.pendingBadge}>
+                          <Text style={styles.pendingBadgeText}>Pending</Text>
                         </View>
                       )}
                     </View>
 
                     <View style={styles.workerSubRow}>
                       <Text style={styles.workerRoleText} numberOfLines={1}>
-                        {worker.role || 'Worker'}
+                        {worker.skill || worker.role || 'Worker'}
                       </Text>
-                      {ot > 0 && (
-                        <View style={styles.overtimeBadge}>
-                          <Ionicons name="time" size={11} color="#D97706" />
-                          <Text style={styles.overtimeBadgeText}>
-                            +{ot < 60 ? `${ot}m` : `${ot / 60}h`} OT
-                          </Text>
-                        </View>
-                      )}
                     </View>
                   </Pressable>
 
@@ -740,40 +691,23 @@ export function BulkAttendancePage({
         </ScrollView>
 
         {/* 3. BOTTOM STICKY ACTION BUTTON */}
-        {!(activeFilter === 'PENDING' && pendingCount === 0) && (
+        {displayedWorkers.length > 0 && (
           <View style={styles.bottomBarContainer}>
             <Pressable
               style={({ pressed }) => [
                 styles.primaryCtaBtn,
-                isSaving && styles.primaryCtaBtnDisabled,
-                pressed && !isSaving && { opacity: 0.9 },
+                (isSaving || selectedDisplayedWorkers.length === 0) && styles.primaryCtaBtnDisabled,
+                pressed && !isSaving && selectedDisplayedWorkers.length > 0 && { opacity: 0.9 },
               ]}
-              onPress={() => {
-                if (hasChanges) {
-                  handleSaveAttendance(false);
-                } else {
-                  handleSaveAttendance(true);
-                }
-              }}
-              disabled={isSaving}
+              onPress={() => handleSaveAttendance()}
+              disabled={isSaving || selectedDisplayedWorkers.length === 0}
             >
               {isSaving ? (
-                <ActivityIndicator color="#0F172A" size="small" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.primaryCtaText}>
-                  {hasChanges ? 'Save Attendance' : 'Mark All Present'}
-                </Text>
+                <Text style={styles.primaryCtaText}>Save Attendance</Text>
               )}
             </Pressable>
-
-            {hasChanges && !isSaving && (
-              <Pressable
-                style={styles.subActionBtn}
-                onPress={() => handleSaveAttendance(true)}
-              >
-                <Text style={styles.subActionText}>or Mark All Present</Text>
-              </Pressable>
-            )}
           </View>
         )}
       </View>
@@ -794,81 +728,6 @@ export function BulkAttendancePage({
         }}
         onClose={() => setIsCalendarOpen(false)}
       />
-
-      {/* OPTIONAL OVERTIME & NOTES MODAL */}
-      {editingWorkerId && (
-        <Modal
-          visible={!!editingWorkerId}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setEditingWorkerId(null)}
-        >
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={() => setEditingWorkerId(null)}
-          >
-            <View style={styles.otModalCard}>
-              <View style={styles.sitePickerHeader}>
-                <View>
-                  <Text style={styles.sitePickerTitle}>
-                    {activeWorkers.find((w) => w.id === editingWorkerId)?.name}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>
-                    Overtime & Notes
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setEditingWorkerId(null)}
-                  hitSlop={10}
-                >
-                  <Ionicons name="close" size={22} color="#64748B" />
-                </Pressable>
-              </View>
-
-              <Text style={styles.otSectionLabel}>Overtime Hours</Text>
-              <View style={styles.otQuickBtnRow}>
-                {[0, 30, 60, 120, 180].map((mins) => {
-                  const currentOt = overtimeMinutes[editingWorkerId] || 0;
-                  const isSelected = currentOt === mins;
-                  const label =
-                    mins === 0 ? 'None' : mins < 60 ? `${mins}m` : `${mins / 60}h`;
-                  return (
-                    <Pressable
-                      key={mins}
-                      style={[
-                        styles.otQuickBtn,
-                        isSelected && styles.otQuickBtnActive,
-                      ]}
-                      onPress={() =>
-                        setOvertimeMinutes((prev) => ({
-                          ...prev,
-                          [editingWorkerId]: mins,
-                        }))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.otQuickBtnText,
-                          isSelected && styles.otQuickBtnTextActive,
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Pressable
-                style={styles.otDoneBtn}
-                onPress={() => setEditingWorkerId(null)}
-              >
-                <Text style={styles.otDoneBtnText}>Save</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
     </SafeAreaView>
   );
 }
@@ -1045,6 +904,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  workerRowUnselected: {
+    opacity: 0.52,
+  },
   rowCheckboxArea: {
     paddingRight: 6,
   },
@@ -1095,6 +957,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
+  },
+  pendingBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
   },
   workerSubRow: {
     flexDirection: 'row',
@@ -1179,7 +1052,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   primaryCtaBtnDisabled: {
-    opacity: 0.7,
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   primaryCtaText: {
     fontSize: 16,

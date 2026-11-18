@@ -6,10 +6,12 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Modal,
   Platform,
   Switch,
   Alert,
+  BackHandler,
+  KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { Ionicons } from '@expo/vector-icons';
@@ -133,7 +135,7 @@ export function BanksPage({
 
         setAccounts(defaultAccounts);
         saveAccountsToStorage(defaultAccounts);
-      } catch {}
+      } catch { }
     }
     loadAccounts();
   }, [data]);
@@ -147,10 +149,41 @@ export function BanksPage({
       } else {
         await SecureStore.setItemAsync(STORAGE_KEY, json);
       }
-    } catch {}
+    } catch { }
   };
 
-  // Open modal for new account
+  const openBankForm = (mode: 'new' | 'edit') => {
+    setModalVisible(true);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const targetUrl = mode === 'edit' ? '/banks/edit' : '/banks/new';
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState(null, '', targetUrl);
+      }
+    }
+  };
+
+  const closeBankForm = () => {
+    setModalVisible(false);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.location.pathname !== '/banks') {
+        window.history.pushState(null, '', '/banks');
+      }
+    }
+  };
+
+  // Handle browser back on Web for /banks/new or /banks/edit
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onPop = () => {
+      if (window.location.pathname === '/banks') {
+        setModalVisible(false);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Open dedicated page for new account
   const handleOpenAdd = () => {
     setEditingId(null);
     setBankName('');
@@ -160,10 +193,10 @@ export function BanksPage({
     setAccountType('Current');
     setUpiId('');
     setIsPrimary(accounts.length === 0);
-    setModalVisible(true);
+    openBankForm('new');
   };
 
-  // Open modal for editing
+  // Open dedicated page for editing
   const handleOpenEdit = (acc: BankAccount) => {
     setEditingId(acc.id);
     setBankName(acc.bankName);
@@ -173,7 +206,7 @@ export function BanksPage({
     setAccountType(acc.accountType);
     setUpiId(acc.upiId || '');
     setIsPrimary(acc.isPrimary);
-    setModalVisible(true);
+    openBankForm('edit');
   };
 
   // Save account
@@ -232,7 +265,7 @@ export function BanksPage({
 
     setAccounts(updated);
     saveAccountsToStorage(updated);
-    setModalVisible(false);
+    closeBankForm();
   };
 
   // Delete account
@@ -290,6 +323,185 @@ export function BanksPage({
       showToast(`${label}: ${text}`, 'i');
     }
   };
+
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
+
+  // Handle Android back button when Add/Edit Bank page is open
+  useEffect(() => {
+    if (Platform.OS === 'web' || !modalVisible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeBankForm();
+      return true;
+    });
+    return () => sub.remove();
+  }, [modalVisible]);
+
+  // Dedicated Full Page for Add / Edit Bank Account
+  if (modalVisible) {
+    return (
+      <View style={styles.pageContainer}>
+        {/* Standard Page Top NavBar */}
+        <TopNavBar
+          title={editingId ? 'Edit Bank Account' : 'Add Bank Account'}
+          onBack={closeBankForm}
+        />
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[
+              styles.formPageScroll,
+              isDesktop && styles.formPageScrollDesktop,
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.formPageCard}>
+              {/* Popular Banks Chips */}
+              <Text style={styles.inputLabel}>QUICK SELECT BANK</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.bankChipsScroll}
+              >
+                {POPULAR_BANKS.map((b) => (
+                  <Pressable
+                    key={b}
+                    style={[styles.bankChip, bankName === b && styles.bankChipSelected]}
+                    onPress={() => setBankName(b)}
+                  >
+                    <Text
+                      style={[styles.bankChipText, bankName === b && styles.bankChipTextSelected]}
+                    >
+                      {b}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Bank Name Field */}
+              <Text style={styles.inputLabel}>BANK NAME *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. State Bank of India"
+                placeholderTextColor="#94A3B8"
+                value={bankName}
+                onChangeText={setBankName}
+              />
+
+              {/* Account Holder Name */}
+              <Text style={styles.inputLabel}>ACCOUNT HOLDER NAME</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Contractor / Firm Name"
+                placeholderTextColor="#94A3B8"
+                value={accountHolder}
+                onChangeText={setAccountHolder}
+              />
+
+              {/* Account Number */}
+              <Text style={styles.inputLabel}>ACCOUNT NUMBER *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 392019482910"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={accountNumber}
+                onChangeText={setAccountNumber}
+              />
+
+              {/* IFSC Code */}
+              <Text style={styles.inputLabel}>IFSC CODE *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. SBIN0001234"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="characters"
+                value={ifscCode}
+                onChangeText={(val) => setIfscCode(val.toUpperCase())}
+              />
+
+              {/* Account Type Selector */}
+              <Text style={styles.inputLabel}>ACCOUNT TYPE</Text>
+              <View style={styles.typeSelectorRow}>
+                {(['Current', 'Savings', 'Cash Credit (CC)'] as const).map((t) => (
+                  <Pressable
+                    key={t}
+                    style={[
+                      styles.typeOptionBtn,
+                      accountType === t && styles.typeOptionBtnActive,
+                    ]}
+                    onPress={() => setAccountType(t)}
+                  >
+                    <Text
+                      style={[
+                        styles.typeOptionText,
+                        accountType === t && styles.typeOptionTextActive,
+                      ]}
+                    >
+                      {t}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* UPI ID */}
+              <Text style={styles.inputLabel}>UPI ID / VPA (OPTIONAL)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. sharma@upi or 9876543210@paytm"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                value={upiId}
+                onChangeText={setUpiId}
+              />
+
+              {/* Default Account Switch */}
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.switchTitle}>Make Primary Account</Text>
+                  <Text style={styles.switchSub}>
+                    Used as the default settlement account for client payments
+                  </Text>
+                </View>
+                <Switch
+                  value={isPrimary}
+                  onValueChange={setIsPrimary}
+                  trackColor={{ false: '#CBD5E1', true: '#10B981' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Sticky 50/50 Footer */}
+          <View style={styles.formPageFooter}>
+            <View
+              style={[
+                styles.formPageFooterInner,
+                isDesktop && styles.formPageFooterInnerDesktop,
+              ]}
+            >
+              <Pressable
+                style={styles.cancelPageBtn}
+                onPress={closeBankForm}
+              >
+                <Text style={styles.cancelPageBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable style={styles.savePageBtn} onPress={handleSaveAccount}>
+                <Text style={styles.savePageBtnText}>Save Account</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.pageContainer}>
@@ -472,176 +684,6 @@ export function BanksPage({
           <Text style={styles.bigAddBtnText}>Add Another Bank Account</Text>
         </Pressable>
       </ScrollView>
-
-      {/* ========================================================= */}
-      {/* 3. ADD / EDIT BANK ACCOUNT MODAL                          */}
-      {/* ========================================================= */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>
-                  {editingId ? 'Edit Bank Account' : 'Add Bank Account'}
-                </Text>
-                <Text style={styles.modalSubtitle}>
-                  For client payments & billing settlement
-                </Text>
-              </View>
-
-              <Pressable
-                style={styles.modalCloseBtn}
-                onPress={() => setModalVisible(false)}
-                hitSlop={8}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-              {/* Popular Banks Chips */}
-              <Text style={styles.inputLabel}>QUICK SELECT BANK</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bankChipsScroll}>
-                {POPULAR_BANKS.map((b) => (
-                  <Pressable
-                    key={b}
-                    style={[
-                      styles.bankChip,
-                      bankName === b && styles.bankChipSelected,
-                    ]}
-                    onPress={() => setBankName(b)}
-                  >
-                    <Text
-                      style={[
-                        styles.bankChipText,
-                        bankName === b && styles.bankChipTextSelected,
-                      ]}
-                    >
-                      {b}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-
-              {/* Bank Name Field */}
-              <Text style={styles.inputLabel}>BANK NAME *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. State Bank of India"
-                placeholderTextColor="#94A3B8"
-                value={bankName}
-                onChangeText={setBankName}
-              />
-
-              {/* Account Holder Name */}
-              <Text style={styles.inputLabel}>ACCOUNT HOLDER NAME</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Contractor / Firm Name"
-                placeholderTextColor="#94A3B8"
-                value={accountHolder}
-                onChangeText={setAccountHolder}
-              />
-
-              {/* Account Number */}
-              <Text style={styles.inputLabel}>ACCOUNT NUMBER *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 392019482910"
-                placeholderTextColor="#94A3B8"
-                keyboardType="numeric"
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-              />
-
-              {/* IFSC Code */}
-              <Text style={styles.inputLabel}>IFSC CODE *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. SBIN0001234"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="characters"
-                value={ifscCode}
-                onChangeText={(val) => setIfscCode(val.toUpperCase())}
-              />
-
-              {/* Account Type Selector */}
-              <Text style={styles.inputLabel}>ACCOUNT TYPE</Text>
-              <View style={styles.typeSelectorRow}>
-                {(['Current', 'Savings', 'Cash Credit (CC)'] as const).map((t) => (
-                  <Pressable
-                    key={t}
-                    style={[
-                      styles.typeOptionBtn,
-                      accountType === t && styles.typeOptionBtnActive,
-                    ]}
-                    onPress={() => setAccountType(t)}
-                  >
-                    <Text
-                      style={[
-                        styles.typeOptionText,
-                        accountType === t && styles.typeOptionTextActive,
-                      ]}
-                    >
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {/* UPI ID */}
-              <Text style={styles.inputLabel}>UPI ID / VPA (OPTIONAL)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. sharma@upi or 9876543210@paytm"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-                value={upiId}
-                onChangeText={setUpiId}
-              />
-
-              {/* Default Account Switch */}
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={styles.switchTitle}>Make Primary Account</Text>
-                  <Text style={styles.switchSub}>
-                    Used as the default settlement account for client payments
-                  </Text>
-                </View>
-                <Switch
-                  value={isPrimary}
-                  onValueChange={setIsPrimary}
-                  trackColor={{ false: '#CBD5E1', true: '#10B981' }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            </ScrollView>
-
-            {/* Modal Actions */}
-            <View style={styles.modalActionsRow}>
-              <Pressable
-                style={styles.cancelModalBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.saveModalBtn}
-                onPress={handleSaveAccount}
-              >
-                <Text style={styles.saveModalBtnText}>Save Account</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -650,6 +692,100 @@ const styles = StyleSheet.create({
   pageContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  formPageHeader: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  formPageBackBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', outlineStyle: 'none' as any } : {}),
+  },
+  formPageTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  formPageScroll: {
+    padding: 14,
+    paddingBottom: 28,
+  },
+  formPageScrollDesktop: {
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+    paddingVertical: 18,
+  },
+  formPageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  formPageFooter: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  formPageFooterInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  formPageFooterInnerDesktop: {
+    maxWidth: 532,
+    alignSelf: 'center',
+  },
+  cancelPageBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  cancelPageBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  savePageBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  savePageBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   scroll: {
     flex: 1,

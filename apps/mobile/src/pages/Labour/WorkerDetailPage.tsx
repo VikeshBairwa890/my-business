@@ -193,7 +193,13 @@ export function WorkerDetailPage({
       <View style={styles.heroWrapper}>
         <View style={[styles.heroCard, isDesktop && styles.heroCardDesktop]}>
           <View style={styles.heroTop}>
-            <View style={[styles.avatar, { backgroundColor: avatarTheme.bg }]}>
+            <View
+              style={[
+                styles.avatar,
+                { backgroundColor: worker.photo ? '#FFFFFF' : avatarTheme.bg },
+                worker.photo ? styles.avatarWithPhoto : null,
+              ]}
+            >
               {worker.photo ? (
                 <Image source={{ uri: worker.photo }} style={styles.avatarImg} />
               ) : (
@@ -201,12 +207,17 @@ export function WorkerDetailPage({
                   {getInitials(worker.name)}
                 </Text>
               )}
-              <View style={[styles.statusDot, { backgroundColor: worker.active ? '#22C55E' : '#94A3B8' }]} />
+              {worker.active ? (
+                <View style={[styles.statusDot, { backgroundColor: '#22C55E' }]} />
+              ) : (
+                <View style={styles.statusCross}>
+                  <AppIcon name="close" size={11} color="#FFFFFF" />
+                </View>
+              )}
             </View>
             <View style={styles.heroInfo}>
               <View style={styles.heroNameRow}>
                 <Text style={styles.heroName} numberOfLines={1}>{worker.name}</Text>
-                {!worker.active && <Badge label={t('inactive', 'INACTIVE')} tone="gray" />}
               </View>
               <View style={styles.heroBadgeRow}>
                 <View style={styles.skillChip}>
@@ -457,8 +468,13 @@ const styles = StyleSheet.create({
   avatarImg: {
     width: '100%',
     height: '100%',
-    borderRadius: 18,
+    borderRadius: 17,
     resizeMode: 'cover',
+    backgroundColor: '#FFFFFF',
+  },
+  avatarWithPhoto: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   editBtn: { alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
   editBtnText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
@@ -469,6 +485,7 @@ const styles = StyleSheet.create({
   avatar: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', position: 'relative', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 4 },
   avatarText: { fontSize: 21, fontWeight: '900' },
   statusDot: { position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, borderWidth: 2.5, borderColor: '#FFFFFF' },
+  statusCross: { position: 'absolute', bottom: -3, right: -3, width: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   heroInfo: { flex: 1, gap: 5 },
   heroNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   heroName: { fontSize: 19, fontWeight: '900', color: '#0F172A', letterSpacing: -0.4 },

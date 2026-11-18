@@ -16,7 +16,6 @@ import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
-import { MetricCard } from '../../components/common/MetricCard';
 import { SearchBar } from '../../components/common/SearchBar';
 import { EmptyState } from '../../components/common/EmptyState';
 import { TopNavBar } from '../../components/common/TopNavBar';
@@ -225,7 +224,6 @@ export function LabourPage({
     <View style={styles.pageWrapper}>
       <TopNavBar
         title={t('labourTitle', 'Labour & Team')}
-        subtitle={t('labourSubtitle', 'Manage workers, wages & daily attendance')}
         userInitials={data.user.name}
         organizationName={data.organization.name}
         onOpenProfile={onOpenProfile}
@@ -258,44 +256,87 @@ export function LabourPage({
         }
       >
         <View style={styles.container}>
-          {/* Financial & Workforce Overview Cards */}
-          <View style={[styles.statsGrid, isDesktop && styles.statsGridDesktop]}>
-            <View style={styles.statCol}>
-              <MetricCard
-                label={t('totalWagesEarned', 'Total Wages Earned')}
-                value={money(totalEarned)}
-                foot={t('acrossAllTime', 'Across all time')}
-                icon="cash-outline"
-              />
-            </View>
-            <View style={styles.statCol}>
-              <MetricCard
-                label={t('pendingWages', 'Pending Wages')}
-                value={money(totalPendingWages)}
-                foot={`${pendingCount} ${lang === 'hi' ? 'मजदूरों को देना बाकी' : 'workers to pay'}`}
-                icon="time-outline"
-                tone="warning"
-              />
-            </View>
-            <View style={styles.statCol}>
-              <MetricCard
-                label={t('workerAdvances', 'Worker Advances')}
-                value={money(totalAdvances)}
-                foot={`${advanceCount} ${lang === 'hi' ? 'मजदूर एडवांस में' : 'workers in advance'}`}
-                icon="arrow-forward-outline"
-                accent
-              />
-            </View>
-            <View style={styles.statCol}>
-              <MetricCard
-                label={t('activeWorkforce', 'Active Workforce')}
-                value={`${activeCount} / ${totalWorkers}`}
-                foot={`${Math.round((activeCount / (totalWorkers || 1)) * 100)}% ${lang === 'hi' ? 'सक्रिय मजदूर' : 'available team'}`}
-                icon="people-outline"
-                tone="success"
-              />
-            </View>
-          </View>
+          {/* Compact Fixed-Size 4 Metric Cards (Overflow-Proof) */}
+          {(() => {
+            const metricItems = [
+              {
+                key: 'earned',
+                label: t('totalWagesEarned', 'Total Earned'),
+                value: money(totalEarned),
+                foot: t('acrossAllTime', 'All time'),
+                icon: 'cash-outline',
+                iconColor: '#1E40AF',
+                valueColor: '#0F172A',
+              },
+              {
+                key: 'pending',
+                label: t('pendingWages', 'Pending Wages'),
+                value: money(totalPendingWages),
+                foot: `${pendingCount} ${lang === 'hi' ? 'बाकी' : 'to pay'}`,
+                icon: 'time-outline',
+                iconColor: '#D97706',
+                valueColor: totalPendingWages > 0 ? '#B45309' : '#0F172A',
+              },
+              {
+                key: 'advance',
+                label: t('workerAdvances', 'Advances'),
+                value: money(totalAdvances),
+                foot: `${advanceCount} ${lang === 'hi' ? 'मजदूर' : 'workers'}`,
+                icon: 'arrow-forward-outline',
+                iconColor: '#2563EB',
+                valueColor: totalAdvances > 0 ? '#1D4ED8' : '#0F172A',
+              },
+              {
+                key: 'active',
+                label: t('activeWorkforce', 'Active Team'),
+                value: `${activeCount} / ${totalWorkers}`,
+                foot: `${Math.round((activeCount / (totalWorkers || 1)) * 100)}% ${lang === 'hi' ? 'सक्रिय' : 'active'}`,
+                icon: 'people-outline',
+                iconColor: '#16A34A',
+                valueColor: '#15803D',
+              },
+            ];
+
+            const renderMiniCard = (item: (typeof metricItems)[number]) => (
+              <View key={item.key} style={styles.miniCard}>
+                <View style={styles.miniCardHeader}>
+                  <Text style={styles.miniCardLabel} numberOfLines={1} ellipsizeMode="tail">
+                    {item.label}
+                  </Text>
+                  <AppIcon name={item.icon} size={13} color={item.iconColor} />
+                </View>
+                <Text
+                  style={[styles.miniCardValue, { color: item.valueColor }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  ellipsizeMode="tail"
+                >
+                  {item.value}
+                </Text>
+                <Text style={styles.miniCardFoot} numberOfLines={1} ellipsizeMode="tail">
+                  {item.foot}
+                </Text>
+              </View>
+            );
+
+            return isDesktop ? (
+              <View style={[styles.miniGridRow, { marginBottom: 12 }]}>
+                {metricItems.map(renderMiniCard)}
+              </View>
+            ) : (
+              <View style={styles.miniGridWrap}>
+                <View style={styles.miniGridRow}>
+                  {renderMiniCard(metricItems[0])}
+                  {renderMiniCard(metricItems[1])}
+                </View>
+                <View style={styles.miniGridRow}>
+                  {renderMiniCard(metricItems[2])}
+                  {renderMiniCard(metricItems[3])}
+                </View>
+              </View>
+            );
+          })()}
 
           {/* Search Bar */}
           <View style={styles.searchSection}>
@@ -309,24 +350,21 @@ export function LabourPage({
           {/* Workers List */}
           <View style={styles.list}>
             {filteredWorkers.map((w) => {
-              const f = workerSummariesMap.get(w.id) || { earned: 0, paid: 0, balance: 0 };
-              const isPending = f.balance > 0;
-              const isAdvance = f.balance < 0;
               const avatarTheme = getAvatarStyle(w.name);
 
               return (
-                <Pressable
+                <View
                   key={w.id}
-                  onPress={() => handleSelectWorker(w.id)}
-                  style={({ pressed }) => [
-                    styles.workerRowItem,
-                    pressed && styles.workerRowItemPressed,
-                  ]}
-                  accessibilityLabel={`Worker ${w.name}`}
+                  style={styles.workerRowItem}
                 >
-                  {/* Left Side: Avatar Image + Name + Designation & Rate */}
+                  {/* Left Side: Avatar Image + Name */}
                   <View style={styles.workerRowLeft}>
-                    <View style={[styles.avatarBox, { backgroundColor: avatarTheme.bg }]}>
+                    <View
+                      style={[
+                        styles.avatarBox,
+                        { backgroundColor: w.photo ? '#FFFFFF' : avatarTheme.bg },
+                      ]}
+                    >
                       {w.photo ? (
                         <Image source={{ uri: w.photo }} style={styles.avatarImg} />
                       ) : (
@@ -334,12 +372,13 @@ export function LabourPage({
                           {getInitials(w.name)}
                         </Text>
                       )}
-                      <View
-                        style={[
-                          styles.statusDotRing,
-                          { backgroundColor: w.active ? '#16A34A' : '#94A3B8' },
-                        ]}
-                      />
+                      {w.active ? (
+                        <View style={styles.statusDotRing} />
+                      ) : (
+                        <View style={styles.statusCrossRing}>
+                          <AppIcon name="close" size={9} color="#FFFFFF" />
+                        </View>
+                      )}
                     </View>
 
                     <View style={styles.workerInfoCol}>
@@ -347,29 +386,6 @@ export function LabourPage({
                         <Text style={styles.workerNameText} numberOfLines={1}>
                           {w.name}
                         </Text>
-                        {!w.active ? <Badge label="INACTIVE" tone="gray" /> : null}
-                      </View>
-
-                      <View style={styles.designationRow}>
-                        <View style={styles.skillBadge}>
-                          <AppIcon name={getSkillIcon(w.skill)} size={11} color="#1E40AF" />
-                          <Text style={styles.skillBadgeText} numberOfLines={1}>
-                            {w.skill || (lang === 'hi' ? 'मजदूर / कारीगर' : 'General Labour')}
-                          </Text>
-                        </View>
-                        {isPending ? (
-                          <View style={styles.dueBadge}>
-                            <Text style={styles.dueBadgeText}>
-                              {lang === 'hi' ? 'बाकी' : 'Due'}: {money(f.balance)}
-                            </Text>
-                          </View>
-                        ) : isAdvance ? (
-                          <View style={styles.advBadge}>
-                            <Text style={styles.advBadgeText}>
-                              {lang === 'hi' ? 'एडवांस' : 'Adv'}: {money(-f.balance)}
-                            </Text>
-                          </View>
-                        ) : null}
                       </View>
                     </View>
                   </View>
@@ -377,10 +393,7 @@ export function LabourPage({
                   {/* Right Side: ID Pass & View Buttons */}
                   <View style={styles.workerRowRight}>
                     <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        setIdCardWorker(w);
-                      }}
+                      onPress={() => setIdCardWorker(w)}
                       style={({ pressed }) => [
                         styles.idCardActionBtn,
                         pressed && styles.viewActionBtnPressed,
@@ -392,10 +405,7 @@ export function LabourPage({
                     </Pressable>
 
                     <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        handleSelectWorker(w.id);
-                      }}
+                      onPress={() => handleSelectWorker(w.id)}
                       style={({ pressed }) => [
                         styles.viewActionBtn,
                         pressed && styles.viewActionBtnPressed,
@@ -406,7 +416,7 @@ export function LabourPage({
                       <Text style={styles.viewActionBtnText}>{t('view', 'View')}</Text>
                     </Pressable>
                   </View>
-                </Pressable>
+                </View>
               );
             })}
 
@@ -474,19 +484,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  miniGridWrap: {
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  statsGridDesktop: {
+  miniGridRow: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
+    gap: 8,
+    marginBottom: 0,
   },
-  statCol: {
-    width: '48%',
-    flexGrow: 1,
+  miniCard: {
+    flex: 1,
+    minWidth: 0,
+    height: 68,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  miniCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  miniCardLabel: {
+    flex: 1,
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  miniCardValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  miniCardFoot: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
   },
   searchSection: {
     marginBottom: 14,
@@ -539,13 +585,27 @@ const styles = StyleSheet.create({
   },
   statusDotRing: {
     position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+    bottom: -2,
+    right: -2,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    backgroundColor: '#16A34A',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+  },
+  statusCrossRing: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   workerInfoCol: {
     flex: 1,
@@ -568,7 +628,8 @@ const styles = StyleSheet.create({
   designationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    overflow: 'hidden',
     gap: 4,
   },
   skillBadge: {
@@ -581,6 +642,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#DBEAFE',
+    flexShrink: 1,
+    maxWidth: '58%',
   },
   skillBadgeText: {
     fontSize: 10,
@@ -653,8 +716,9 @@ const styles = StyleSheet.create({
   avatarImg: {
     width: '100%',
     height: '100%',
-    borderRadius: 14,
+    borderRadius: 9,
     resizeMode: 'cover',
+    backgroundColor: '#FFFFFF',
   },
   viewActionBtn: {
     flexDirection: 'row',

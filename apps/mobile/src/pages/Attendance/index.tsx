@@ -26,6 +26,8 @@ export { MonthlyAttendancePage as MonthlyRegisterPage } from './MonthlyAttendanc
 
 export { BulkAttendancePage } from './BulkAttendancePage';
 export type { BulkAttendancePageProps } from './BulkAttendancePage';
+export { MarkAttendancePage } from './MarkAttendancePage';
+export type { MarkAttendancePageProps } from './MarkAttendancePage';
 
 export interface AttendancePageProps {
   data: Snapshot;
@@ -35,6 +37,7 @@ export interface AttendancePageProps {
   defaultView?: 'MENU' | 'DAILY' | 'MONTHLY' | 'BULK';
   refreshing: boolean;
   onRefresh: () => void;
+  onBulkAttendanceSaved?: (records: Row[]) => void;
 }
 
 export function AttendancePage({
@@ -45,6 +48,7 @@ export function AttendancePage({
   defaultView = 'MENU',
   refreshing,
   onRefresh,
+  onBulkAttendanceSaved,
 }: AttendancePageProps) {
   const [subpage, setSubpage] = useState<'MENU' | 'DAILY' | 'MONTHLY' | 'BULK'>(defaultView);
 
@@ -84,6 +88,7 @@ export function AttendancePage({
         onBack={() => setSubpage('MENU')}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        onBulkAttendanceSaved={onBulkAttendanceSaved}
       />
     );
   }

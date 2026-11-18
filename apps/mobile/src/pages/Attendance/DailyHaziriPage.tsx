@@ -303,18 +303,16 @@ export function DailyHaziriPage({
               onPress={() => setStatusFilter('1')}
               style={[
                 styles.statusChip,
-                styles.statusChipPresent,
-                statusFilter === '1' && styles.statusChipActivePresent,
+                statusFilter === '1' && styles.statusChipActiveAll,
               ]}
             >
               <Text
                 style={[
                   styles.statusChipText,
-                  { color: '#166534' },
                   statusFilter === '1' && styles.statusChipTextActive,
                 ]}
               >
-                🟢 {lang === 'hi' ? 'उपस्थित' : 'Present'} ({stats.present})
+                {lang === 'hi' ? 'उपस्थित' : 'Present'} ({stats.present})
               </Text>
             </Pressable>
 
@@ -322,18 +320,16 @@ export function DailyHaziriPage({
               onPress={() => setStatusFilter('0.5')}
               style={[
                 styles.statusChip,
-                styles.statusChipHalf,
-                statusFilter === '0.5' && styles.statusChipActiveHalf,
+                statusFilter === '0.5' && styles.statusChipActiveAll,
               ]}
             >
               <Text
                 style={[
                   styles.statusChipText,
-                  { color: '#92400E' },
                   statusFilter === '0.5' && styles.statusChipTextActive,
                 ]}
               >
-                🟡 {lang === 'hi' ? 'हाफ डे' : 'Half'} ({stats.halfDay})
+                {lang === 'hi' ? 'हाफ डे' : 'Half Day'} ({stats.halfDay})
               </Text>
             </Pressable>
 
@@ -341,18 +337,16 @@ export function DailyHaziriPage({
               onPress={() => setStatusFilter('0')}
               style={[
                 styles.statusChip,
-                styles.statusChipAbsent,
-                statusFilter === '0' && styles.statusChipActiveAbsent,
+                statusFilter === '0' && styles.statusChipActiveAll,
               ]}
             >
               <Text
                 style={[
                   styles.statusChipText,
-                  { color: '#991B1B' },
                   statusFilter === '0' && styles.statusChipTextActive,
                 ]}
               >
-                🔴 {lang === 'hi' ? 'अनुपस्थित' : 'Absent'} ({stats.absent})
+                {lang === 'hi' ? 'अनुपस्थित' : 'Absent'} ({stats.absent})
               </Text>
             </Pressable>
 
@@ -361,18 +355,16 @@ export function DailyHaziriPage({
                 onPress={() => setStatusFilter('UNMARKED')}
                 style={[
                   styles.statusChip,
-                  styles.statusChipPending,
-                  statusFilter === 'UNMARKED' && styles.statusChipActivePending,
+                  statusFilter === 'UNMARKED' && styles.statusChipActiveAll,
                 ]}
               >
                 <Text
                   style={[
                     styles.statusChipText,
-                    { color: '#475569' },
                     statusFilter === 'UNMARKED' && styles.statusChipTextActive,
                   ]}
                 >
-                  ⚪ {lang === 'hi' ? 'बाकी' : 'Pending'} ({stats.pendingCount})
+                  {lang === 'hi' ? 'बाकी' : 'Pending'} ({stats.pendingCount})
                 </Text>
               </Pressable>
             )}

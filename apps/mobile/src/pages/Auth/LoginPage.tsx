@@ -19,6 +19,7 @@ import { RedirectingScreen } from '../../components/common/RedirectingScreen';
 import { Colors } from '../../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { ServerConfigModal } from '../../components/common/ServerConfigModal';
+import { showToast } from '../../context/ToastContext';
 
 interface LoginPageProps {
   onLogin: (token: string, user?: UserInfo) => Promise<void>;
@@ -108,12 +109,12 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Please enter a valid email address.');
+      showToast('Please enter a valid email address', 'e');
       return;
     }
 
     if (!password) {
-      setError('Please enter your password.');
+      showToast('Please enter your password', 'e');
       return;
     }
 
@@ -130,7 +131,7 @@ export function LoginPage({ onLogin, onNavigateToSignUp, onNavigateToForgotPassw
       await new Promise((r) => setTimeout(r, 350));
       await onLogin(result.token, result.user);
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      showToast(err.message || 'Authentication failed. Please check your credentials.', 'e');
       setIsRedirecting(false);
       setBusy(false);
     }

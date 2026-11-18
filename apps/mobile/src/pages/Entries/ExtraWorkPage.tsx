@@ -23,6 +23,7 @@ import { Snapshot, Row } from '../../types';
 import { money } from '../../finance';
 import { today } from '../../forms';
 import { useLanguage } from '../../i18n';
+import { showToast } from '../../context/ToastContext';
 
 export interface ExtraWorkPageProps {
   data: Snapshot;
@@ -99,20 +100,22 @@ export function ExtraWorkPage({
   const handleSaveExtra = async () => {
     setLocalError('');
     if (!formSiteId) {
-      setLocalError(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site');
+      showToast(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site', 'e');
       return;
     }
     if (!formDescription.trim()) {
-      setLocalError(
+      showToast(
         lang === 'hi'
           ? 'कृपया अतिरिक्त काम का विवरण भरें'
-          : 'Please enter extra work description'
+          : 'Please enter extra work description',
+        'e'
       );
       return;
     }
     if (!formAmount || Number(formAmount) <= 0) {
-      setLocalError(
-        lang === 'hi' ? 'कृपया सही अतिरिक्त राशि भरें' : 'Please enter a valid extra amount'
+      showToast(
+        lang === 'hi' ? 'कृपया सही अतिरिक्त राशि भरें' : 'Please enter a valid extra amount',
+        'e'
       );
       return;
     }
@@ -168,11 +171,6 @@ export function ExtraWorkPage({
       {/* 1. TOP NAVIGATION BAR */}
       <TopNavBar
         title={lang === 'hi' ? 'एक्स्ट्रा काम (अतिरिक्त कार्य)' : 'Extra Work Register'}
-        subtitle={
-          lang === 'hi'
-            ? 'ठेके के अलावा ग्राहक द्वारा कराया गया अतिरिक्त काम'
-            : 'Contract scope additions, variations & extra client billing'
-        }
         icon="add-circle"
         userInitials={data.user?.name}
         organizationName={data.organization?.name}
@@ -439,7 +437,7 @@ export function ExtraWorkPage({
                 <Pressable
                   onPress={handleSaveExtra}
                   disabled={busy}
-                  style={[styles.formSaveBtn, { backgroundColor: '#0284C7' }, busy && { opacity: 0.6 }]}
+                  style={[styles.formSaveBtn, busy && { opacity: 0.6 }]}
                 >
                   {busy ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
@@ -731,39 +729,44 @@ const styles = StyleSheet.create({
   formActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 8,
     width: '100%',
   },
   formCancelBtn: {
     flex: 1,
-    minHeight: 46,
-    paddingVertical: 12,
-    borderRadius: 10,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   formCancelBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   formSaveBtn: {
     flex: 1,
-    minHeight: 46,
+    height: 46,
     flexDirection: 'row',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   formSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 

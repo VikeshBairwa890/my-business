@@ -22,6 +22,7 @@ import { CalendarPickerModal } from '../common/CalendarPickerModal';
 import { today } from '../../forms';
 import { money, workerSummary } from '../../finance';
 import { useLanguage } from '../../i18n';
+import { showToast } from '../../context/ToastContext';
 
 export interface WagePaymentModalProps {
   spec: FormSpec;
@@ -102,15 +103,15 @@ export function WagePaymentModal({
     setLocalError('');
     const amtNum = parseFloat(amount.trim());
     if (isNaN(amtNum) || amtNum <= 0) {
-      setLocalError(lang === 'hi' ? 'कृपया मान्य भुगतान राशि दर्ज करें।' : 'Please enter a valid payment amount.');
+      showToast(lang === 'hi' ? 'कृपया मान्य भुगतान राशि दर्ज करें' : 'Please enter a valid payment amount', 'e');
       return;
     }
     if (!workerId) {
-      setLocalError(lang === 'hi' ? 'कृपया मजदूर (Worker) चुनें।' : 'Please select a worker.');
+      showToast(lang === 'hi' ? 'कृपया मजदूर (Worker) चुनें' : 'Please select a worker', 'e');
       return;
     }
     if (!siteId) {
-      setLocalError(lang === 'hi' ? 'कृपया साइट (Work Site) चुनें।' : 'Please select a work site.');
+      showToast(lang === 'hi' ? 'कृपया साइट (Work Site) चुनें' : 'Please select a work site', 'e');
       return;
     }
 
@@ -493,25 +494,7 @@ export function WagePaymentModal({
     </SafeAreaView>
   );
 
-  if (asPage) {
-    return <View style={styles.pageRoot}>{formContent}</View>;
-  }
-
-  return (
-    <Modal
-      visible
-      animationType={isDesktop ? 'fade' : 'slide'}
-      onRequestClose={() => !busy && onClose()}
-      presentationStyle={isDesktop ? 'overFullScreen' : 'fullScreen'}
-      transparent={isDesktop}
-    >
-      <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
-        <View style={[styles.modalCard, isDesktop && styles.modalCardDesktop]}>
-          {formContent}
-        </View>
-      </View>
-    </Modal>
-  );
+  return <View style={styles.pageRoot}>{formContent}</View>;
 }
 
 const styles = StyleSheet.create({

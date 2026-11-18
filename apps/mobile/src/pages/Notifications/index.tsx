@@ -13,10 +13,19 @@ import { Colors } from '../../theme/colors';
 import { TopNavBar } from '../../components/common/TopNavBar';
 import { Snapshot } from '../../types';
 import { money } from '../../finance';
+import { today } from '../../forms';
+import { showToast } from '../../context/ToastContext';
+import {
+  computePartySummary,
+  daysBetween,
+  formatShortDate,
+  openWhatsAppReminder,
+  PartySummary,
+} from '../Khata/khataUtils';
 
 export interface NotificationItem {
   id: string;
-  type: 'payment' | 'haziri' | 'site' | 'wage' | 'system';
+  type: 'khata' | 'payment' | 'haziri' | 'site' | 'wage' | 'system';
   title: string;
   message: string;
   timeAgo: string;
@@ -24,6 +33,7 @@ export interface NotificationItem {
   actionTab?: string;
   targetId?: string;
   amount?: number;
+  khataSummary?: PartySummary;
 }
 
 export interface NotificationsPageProps {
@@ -41,12 +51,41 @@ export function NotificationsPage({
   onRefresh,
   refreshing = false,
 }: NotificationsPageProps) {
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'payment' | 'haziri' | 'system'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'khata' | 'payment' | 'haziri' | 'system'>('all');
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const senderName = data?.organization?.name || data?.user?.name || 'ThekaBook';
 
   // Generate dynamic contextual notifications from current snapshot data
   const rawNotifications: NotificationItem[] = useMemo(() => {
     const list: NotificationItem[] = [];
+    const todayStr = today();
+
+    // 0. Khata Book Due Date Payment Reminders (Due Today or Overdue)
+    const khataParties = data?.khataParties ?? [];
+    const khataEntries = data?.khataEntries ?? [];
+    const dueKhata = khataParties
+      .map((p) => computePartySummary(p, khataEntries))
+      .filter((s) => s.balance > 0 && s.reminderDate && s.reminderDate <= todayStr)
+      .sort((a, b) => a.reminderDate.localeCompare(b.reminderDate));
+
+    dueKhata.forEach((s) => {
+      const overdueDays = daysBetween(s.reminderDate, todayStr);
+      const isDueToday = overdueDays <= 0;
+      list.push({
+        id: `khata-due-${s.party.id}-${s.reminderDate}`,
+        type: 'khata',
+        title: isDueToday
+          ? `Due Today: ${s.party.name} • ${money(s.balance)}`
+          : `Overdue (${overdueDays}d): ${s.party.name} • ${money(s.balance)}`,
+        message: 'Khata Book payment reminder due. Send reminder on WhatsApp.',
+        timeAgo: isDueToday ? 'Today' : formatShortDate(s.reminderDate),
+        read: false,
+        actionTab: 'khata',
+        targetId: s.party.id,
+        amount: s.balance,
+        khataSummary: s,
+      });
+    });
 
     // 1. Recent Client Payments In
     const recentPayments = (data?.entries || [])
@@ -98,7 +137,7 @@ export function NotificationsPage({
       id: 'haziri-daily-reminder',
       type: 'haziri',
       title: 'Daily Haziri Reminder',
-      message: workerCount > 0 
+      message: workerCount > 0
         ? `Don't forget to mark attendance for today's ${workerCount} active workers.`
         : 'Add your team members and mark daily haziri to track attendance.',
       timeAgo: 'Today, 08:00 AM',
@@ -160,7 +199,8 @@ export function NotificationsPage({
     return rawNotifications.filter((item) => {
       const isRead = item.read || readIds.has(item.id);
       if (selectedFilter === 'unread') return !isRead;
-      if (selectedFilter === 'payment') return item.type === 'payment' || item.type === 'wage';
+      if (selectedFilter === 'khata') return item.type === 'khata';
+      if (selectedFilter === 'payment') return item.type === 'payment' || item.type === 'wage' || item.type === 'khata';
       if (selectedFilter === 'haziri') return item.type === 'haziri';
       if (selectedFilter === 'system') return item.type === 'system' || item.type === 'site';
       return true;
@@ -171,8 +211,14 @@ export function NotificationsPage({
     return rawNotifications.filter((n) => !n.read && !readIds.has(n.id)).length;
   }, [rawNotifications, readIds]);
 
+  const khataDueCount = useMemo(() => {
+    return rawNotifications.filter((n) => n.type === 'khata').length;
+  }, [rawNotifications]);
+
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {
+      case 'khata':
+        return { name: 'alarm-outline' as const, color: '#DC2626', bg: '#FEF2F2' };
       case 'payment':
         return { name: 'arrow-down-circle' as const, color: '#16A34A', bg: '#DCFCE7' };
       case 'wage':
@@ -228,6 +274,15 @@ export function NotificationsPage({
           >
             <Text style={[styles.filterPillText, selectedFilter === 'unread' && styles.filterPillTextActive]}>
               Unread {unreadCount > 0 ? `(${unreadCount})` : ''}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.filterPill, selectedFilter === 'khata' && styles.filterPillActive]}
+            onPress={() => setSelectedFilter('khata')}
+          >
+            <Text style={[styles.filterPillText, selectedFilter === 'khata' && styles.filterPillTextActive]}>
+              Khata Due {khataDueCount > 0 ? `(${khataDueCount})` : ''}
             </Text>
           </Pressable>
 
@@ -316,13 +371,38 @@ export function NotificationsPage({
                   </View>
 
                   <View style={styles.cardBottomRow}>
-                    <Text style={styles.itemMessage} numberOfLines={1}>
+                    <Text style={styles.itemMessage} numberOfLines={2}>
                       {item.message}
                     </Text>
-                    {item.actionTab && (
+                    {item.actionTab && !item.khataSummary && (
                       <Ionicons name="chevron-forward" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
                     )}
                   </View>
+
+                  {item.khataSummary ? (
+                    <View style={styles.khataActionRow}>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          const ks = item.khataSummary!;
+                          openWhatsAppReminder(
+                            ks.party,
+                            ks.balance,
+                            senderName,
+                            ks.lastEntryDate,
+                            (m) => showToast(m, 'w')
+                          );
+                        }}
+                        style={({ pressed }) => [
+                          styles.khataWhatsappBtn,
+                          pressed && { opacity: 0.8 },
+                        ]}
+                      >
+                        <Ionicons name="logo-whatsapp" size={14} color="#FFFFFF" />
+                        <Text style={styles.khataWhatsappBtnText}>Send WhatsApp</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               </Pressable>
             );
@@ -472,6 +552,24 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 15,
     flex: 1,
+  },
+  khataActionRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  khataWhatsappBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  khataWhatsappBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   /* Empty State */

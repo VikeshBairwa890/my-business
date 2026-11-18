@@ -19,31 +19,39 @@ export class EntryService {
     const dueDate = data.dueDate || data.due_date ? new Date(data.dueDate || data.due_date) : null;
     const quantity = data.quantity !== undefined && data.quantity !== null ? Number(data.quantity) : null;
 
-    // Verify site
-    const site = await prisma.site.findFirst({ where: { orgId, id: siteId } });
-    if (!site) throw new Error('Site not found');
-
-    // Rule: worker only for wage payments
+    // Synchronous rule checks first (0ms)
     if (data.kind === 'WAGE_PAYMENT' && !workerId) {
       throw new Error('Select a worker for labour payments');
     }
-    if (workerId) {
-      const worker = await prisma.worker.findFirst({ where: { orgId, id: workerId } });
-      if (!worker) throw new Error('Worker not found');
+    if (data.kind === 'SUPPLIER_PAYMENT' && !linkedEntryId) {
+      throw new Error('Supplier payment must reference a cost bill');
     }
 
-    // Rule: supplier payment must link to cost bill
-    if (data.kind === 'SUPPLIER_PAYMENT') {
-      if (!linkedEntryId) throw new Error('Supplier payment must reference a cost bill');
-      const bill = await prisma.entry.findFirst({ where: { orgId, id: linkedEntryId } });
+    const isSupplierPayment = data.kind === 'SUPPLIER_PAYMENT';
+
+    // Run all verification queries in 1 parallel round-trip
+    const [site, worker, bill, paidAggregate] = await Promise.all([
+      prisma.site.findFirst({ where: { orgId, id: siteId } }),
+      workerId ? prisma.worker.findFirst({ where: { orgId, id: workerId } }) : Promise.resolve(null),
+      isSupplierPayment
+        ? prisma.entry.findFirst({ where: { orgId, id: linkedEntryId } })
+        : Promise.resolve(null),
+      isSupplierPayment
+        ? prisma.entry.aggregate({
+            where: { orgId, linkedEntryId, voidedAt: null },
+            _sum: { amount: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!site) throw new Error('Site not found');
+    if (workerId && !worker) throw new Error('Worker not found');
+
+    if (isSupplierPayment) {
       if (!bill || bill.voidedAt || !['MATERIAL', 'EXPENSE'].includes(bill.kind)) {
         throw new Error('Choose a valid cost bill from this site');
       }
-      const paidAggregate = await prisma.entry.aggregate({
-        where: { orgId, linkedEntryId, voidedAt: null },
-        _sum: { amount: true },
-      });
-      const alreadyPaid = Number(paidAggregate._sum.amount || 0);
+      const alreadyPaid = Number(paidAggregate?._sum?.amount || 0);
       if (alreadyPaid + amount > Number(bill.amount)) {
         throw new Error('Payment exceeds bill balance');
       }
@@ -72,13 +80,12 @@ export class EntryService {
   }
 
   static async void(orgId, id, reason) {
-    const entry = await prisma.entry.findFirst({ where: { orgId, id } });
+    const [entry, linkedPayment] = await Promise.all([
+      prisma.entry.findFirst({ where: { orgId, id } }),
+      prisma.entry.findFirst({ where: { orgId, linkedEntryId: id, voidedAt: null } }),
+    ]);
     if (!entry) throw new Error('Entry not found');
     if (entry.voidedAt) throw new Error('Entry is already voided');
-
-    const linkedPayment = await prisma.entry.findFirst({
-      where: { orgId, linkedEntryId: id, voidedAt: null },
-    });
     if (linkedPayment) {
       throw new Error('Void linked supplier payments before voiding this bill');
     }

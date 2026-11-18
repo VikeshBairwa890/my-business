@@ -19,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { Snapshot, Row } from '../../types';
 import { money, siteSummary } from '../../finance';
+import { today } from '../../forms';
+import { computePartySummary } from '../Khata/khataUtils';
 import { SidebarDrawer } from '../../components/common/SidebarDrawer';
 import { useLanguage } from '../../i18n';
 
@@ -287,6 +289,15 @@ export function DashboardPage({
   }, [data?.sites, searchQuery]);
 
   // Primary reminder calculation (highest pending party)
+  const khataDueTodayCount = useMemo(() => {
+    const todayStr = today();
+    const khataParties = data?.khataParties ?? [];
+    const khataEntries = data?.khataEntries ?? [];
+    return khataParties
+      .map((p) => computePartySummary(p, khataEntries))
+      .filter((s) => s.balance > 0 && s.reminderDate && s.reminderDate <= todayStr).length;
+  }, [data?.khataParties, data?.khataEntries]);
+
   const reminderInfo = useMemo(() => {
     if (data?.sites && data.sites.length > 0) {
       for (const s of data.sites) {
@@ -418,13 +429,13 @@ export function DashboardPage({
         onPress: () => onNavigateTab('team'),
       },
       {
-        id: 'reports',
-        label: 'P&L Reports',
-        icon: 'bar-chart-outline',
-        bg: '#CCFBF1',
-        border: '#5EEAD4',
-        iconColor: '#115E59',
-        onPress: () => onNavigateTab('reports'),
+        id: 'khata',
+        label: 'Khata Book',
+        icon: 'book-outline',
+        bg: '#EEF2FF',
+        border: '#A5B4FC',
+        iconColor: '#3730A3',
+        onPress: () => onNavigateTab('khata'),
       },
     ],
   ];
@@ -480,7 +491,15 @@ export function DashboardPage({
               accessibilityLabel="Notifications"
             >
               <AppIcon name="notifications-outline" size={20} color="#0F172A" />
-              <View style={styles.bellBadgeDot} />
+              {khataDueTodayCount > 0 ? (
+                <View style={styles.bellCountBadge}>
+                  <Text style={styles.bellCountText}>
+                    {khataDueTodayCount > 9 ? '9+' : khataDueTodayCount}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.bellBadgeDot} />
+              )}
             </Pressable>
           </View>
         </View>
@@ -977,6 +996,25 @@ const styles = StyleSheet.create({
     right: 11,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+  },
+  bellCountBadge: {
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#DC2626',
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellCountText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 
   /* 2. Body Container (Sits cleanly below fixed header on light background) */

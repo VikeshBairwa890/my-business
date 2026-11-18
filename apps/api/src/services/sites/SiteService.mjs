@@ -58,8 +58,10 @@ export class SiteService {
     });
   }
 
-  static async update(orgId, id, data) {
-    await this.getById(orgId, id);
+  static async update(orgId, id, data, existing = null) {
+    if (!existing) {
+      await this.getById(orgId, id);
+    }
 
     const updateData = {};
     if (data.name !== undefined) updateData.name = data.name.trim();

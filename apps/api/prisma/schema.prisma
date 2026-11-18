@@ -37,6 +37,8 @@ model Organization {
   attachments  Attachment[]
   audits       Audit[]
   requests     Request[]
+  khataParties KhataParty[]
+  khataEntries KhataEntry[]
 }
 
 // ==========================================
@@ -313,4 +315,52 @@ model Request {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@id([orgId, key])
+}
+
+// ==========================================
+// 12. UDHAAR KHATA PARTIES (Personal & Party Len-Den)
+// ==========================================
+model KhataParty {
+  id           String       @id @default(uuid())
+  orgId        String
+  name         String
+  phone        String       @default("")
+  category     String       @default("FRIEND") // FRIEND, LABOUR, SUPPLIER, CLIENT, OTHER
+  workerId     String?
+  notes        String       @default("")
+  reminderDate DateTime?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  entries      KhataEntry[]
+
+  @@unique([orgId, id])
+  @@index([orgId, active])
+}
+
+// ==========================================
+// 13. UDHAAR KHATA ENTRIES (Diya / Liya Ledger)
+// ==========================================
+model KhataEntry {
+  id           String       @id @default(uuid())
+  orgId        String
+  partyId      String
+  isDebit      Boolean      @default(false) // GAVE (true) or GOT (false Mile)
+  amount       Decimal      @db.Decimal(15, 2)
+  date         DateTime
+  note         String       @default("")
+  mode         String       @default("CASH") // CASH, UPI, BANK_TRANSFER
+  proofUrl     String       @default("")
+  proofName    String       @default("")
+  proofMime    String       @default("")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  party        KhataParty   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, id])
+  @@index([orgId, partyId, date])
 }

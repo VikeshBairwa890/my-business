@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/icons/AppIcon';
 import { request } from '../../api';
 import { Colors } from '../../theme/colors';
+import { showToast } from '../../context/ToastContext';
 
 interface ForgotPasswordPageProps {
   onNavigateToLogin: () => void;
@@ -125,7 +126,7 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Please enter a valid registered email address.');
+      showToast('Please enter a valid registered email address', 'e');
       return;
     }
 
@@ -142,7 +143,7 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
       setCanResend(false);
       setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (err: any) {
-      setError(err.message || 'Unable to find an account with this email.');
+      showToast(err.message || 'Unable to find an account with this email', 'e');
     } finally {
       setBusy(false);
     }
@@ -161,8 +162,9 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
       }
       setResendTimer(30);
       setCanResend(false);
+      showToast('Verification code resent', 's');
     } catch (err: any) {
-      setError(err.message || 'Failed to resend code. Please try again.');
+      showToast(err.message || 'Failed to resend code. Please try again', 'e');
     } finally {
       setBusy(false);
     }
@@ -173,17 +175,17 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
     if (busy) return;
 
     if (!otp.trim() || otp.trim().length !== 6) {
-      setError('Please enter the 6-digit verification code.');
+      showToast('Please enter the 6-digit verification code', 'e');
       return;
     }
 
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.');
+      showToast('New password must be at least 8 characters long', 'e');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match. Please re-enter.');
+      showToast('Passwords do not match. Please re-enter', 'e');
       return;
     }
 
@@ -199,7 +201,7 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
 
       setStep(3);
     } catch (err: any) {
-      setError(err.message || 'Password reset failed. Please check the code.');
+      showToast(err.message || 'Password reset failed. Please check the code', 'e');
     } finally {
       setBusy(false);
     }
@@ -472,8 +474,8 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
                         styles.inputField,
                         focusedField === 'confirmPassword' && styles.inputFieldFocused,
                         confirmPassword.length > 0 &&
-                          newPassword === confirmPassword &&
-                          styles.inputFieldSuccess,
+                        newPassword === confirmPassword &&
+                        styles.inputFieldSuccess,
                       ]}
                     >
                       <View style={styles.inputIcon}>
@@ -484,8 +486,8 @@ export function ForgotPasswordPage({ onNavigateToLogin }: ForgotPasswordPageProp
                             confirmPassword.length > 0 && newPassword === confirmPassword
                               ? Colors.success
                               : focusedField === 'confirmPassword'
-                              ? Colors.accent
-                              : Colors.textSubtle
+                                ? Colors.accent
+                                : Colors.textSubtle
                           }
                         />
                       </View>

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   TextInput,
@@ -10,10 +9,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { AppIcon } from '../icons/AppIcon';
+import { TopNavBar } from './TopNavBar';
 import { FormSpec, Row } from '../../types';
 import { money } from '../../finance';
+import { showToast } from '../../context/ToastContext';
 
 export interface VoidEntryModalProps {
   spec: FormSpec;
@@ -90,11 +92,11 @@ export function VoidEntryModal({
 
   const kindMeta = entry?.kind
     ? KIND_META[entry.kind] || {
-        label: entry.kind,
-        icon: 'document-text',
-        color: '#64748B',
-        bg: '#F1F5F9',
-      }
+      label: entry.kind,
+      icon: 'document-text',
+      color: '#64748B',
+      bg: '#F1F5F9',
+    }
     : null;
 
   const formatDateDisplay = (dateStr?: string) => {
@@ -115,204 +117,229 @@ export function VoidEntryModal({
   const handleConfirm = () => {
     setLocalError('');
     if (!reason.trim()) {
-      setLocalError('Please select or type a reason for voiding.');
+      showToast('Please select or type a reason for voiding', 'e');
       return;
     }
     onSave({ reason: reason.trim() });
   };
 
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
+
   return (
-    <Modal
-      visible
-      animationType="fade"
-      onRequestClose={() => !busy && onClose()}
-      transparent={true}
-    >
-      <View style={styles.modalOverlay}>
-        <Pressable
-          style={styles.backdropPressable}
-          onPress={() => !busy && onClose()}
-        />
+    <View style={styles.pageRoot}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        {/* Standard Page Top NavBar */}
+        <TopNavBar title="Void Entry" onBack={() => !busy && onClose()} />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.dialogContainer}
-        >
-          <View style={styles.dialogCard}>
-            {/* Top Close Bar */}
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <View style={styles.dangerIconBadge}>
-                  <AppIcon name="trash" size={16} color="#DC2626" />
-                </View>
-                <View>
-                  <Text style={styles.headerTitle}>Void Entry?</Text>
-                  <Text style={styles.headerSubtitle}>Cancel & remove from totals</Text>
-                </View>
-              </View>
-
-              <Pressable
-                onPress={() => !busy && onClose()}
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-                accessibilityLabel="Close"
-              >
-                <AppIcon name="close" size={16} color="#64748B" />
-              </Pressable>
-            </View>
-
-            {/* Error Banner */}
-            {localError || error ? (
-              <View style={styles.errorBanner}>
-                <AppIcon name="alert-circle" size={14} color="#DC2626" />
-                <Text style={styles.errorBannerText}>{localError || error}</Text>
-              </View>
-            ) : null}
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.dialogBody}
-            >
-              {/* Mini Transaction Summary Card */}
-              {entry ? (
-                <View style={styles.transactionCard}>
-                  <View style={styles.transactionTop}>
-                    {kindMeta && (
-                      <View
-                        style={[
-                          styles.kindBadge,
-                          { backgroundColor: kindMeta.bg },
-                        ]}
-                      >
-                        <AppIcon
-                          name={kindMeta.icon as any}
-                          size={12}
-                          color={kindMeta.color}
-                        />
-                        <Text
-                          style={[
-                            styles.kindBadgeText,
-                            { color: kindMeta.color },
-                          ]}
-                        >
-                          {kindMeta.label}
-                        </Text>
-                      </View>
-                    )}
-                    <Text style={styles.transactionDate}>
-                      {formatDateDisplay(entry.date)}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.amountText}>{money(entry.amount)}</Text>
-
-                  <View style={styles.metaRow}>
-                    {site?.name ? (
-                      <Text style={styles.metaText} numberOfLines={1}>
-                        📍 {site.name}
-                      </Text>
-                    ) : null}
-                    {worker?.name || entry.party ? (
-                      <Text style={styles.metaText} numberOfLines={1}>
-                        👤 {worker?.name || entry.party}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {entry.description ? (
-                    <Text style={styles.descText} numberOfLines={1}>
-                      📝 {entry.description}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {/* Quick Reason Chips */}
-              <View style={styles.reasonSection}>
-                <Text style={styles.sectionLabel}>REASON FOR VOIDING *</Text>
-                <View style={styles.chipsRow}>
-                  {VOID_REASONS.map((r) => {
-                    const isSelected = reason === r;
-                    return (
-                      <Pressable
-                        key={r}
-                        onPress={() => setReason(r)}
-                        style={[
-                          styles.chip,
-                          isSelected && styles.chipActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            isSelected && styles.chipTextActive,
-                          ]}
-                        >
-                          {r}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Reason Input */}
-                <TextInput
-                  value={reason}
-                  onChangeText={setReason}
-                  placeholder="Or enter custom reason..."
-                  placeholderTextColor="#94A3B8"
-                  style={[
-                    styles.input,
-                    Platform.OS === 'web'
-                      ? ({ outlineStyle: 'none', outlineWidth: 0 } as any)
-                      : undefined,
-                  ]}
-                />
-              </View>
-            </ScrollView>
-
-            {/* Actions */}
-            <View style={styles.footer}>
-              <Pressable
-                onPress={() => !busy && onClose()}
-                disabled={busy}
-                style={({ pressed }) => [
-                  styles.cancelBtn,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleConfirm}
-                disabled={busy}
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  busy && { opacity: 0.6 },
-                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-                ]}
-              >
-                {busy ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <AppIcon name="trash" size={15} color="#FFFFFF" />
-                    <Text style={styles.confirmBtnText}>Void Entry</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
+        {/* Error Banner */}
+        {localError || error ? (
+          <View style={styles.errorBanner}>
+            <AppIcon name="alert-circle" size={14} color="#DC2626" />
+            <Text style={styles.errorBannerText}>{localError || error}</Text>
           </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+        ) : null}
+
+        <ScrollView
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.dialogBody, isDesktop && styles.dialogBodyDesktop]}
+        >
+          {/* Mini Transaction Summary Card */}
+          {entry ? (
+            <View style={styles.transactionCard}>
+              <View style={styles.transactionTop}>
+                {kindMeta && (
+                  <View
+                    style={[
+                      styles.kindBadge,
+                      { backgroundColor: kindMeta.bg },
+                    ]}
+                  >
+                    <AppIcon
+                      name={kindMeta.icon as any}
+                      size={12}
+                      color={kindMeta.color}
+                    />
+                    <Text
+                      style={[
+                        styles.kindBadgeText,
+                        { color: kindMeta.color },
+                      ]}
+                    >
+                      {kindMeta.label}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.transactionDate}>
+                  {formatDateDisplay(entry.date)}
+                </Text>
+              </View>
+
+              <Text style={styles.amountText}>{money(entry.amount)}</Text>
+
+              <View style={styles.metaRow}>
+                {site?.name ? (
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    📍 {site.name}
+                  </Text>
+                ) : null}
+                {worker?.name || entry.party ? (
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    👤 {worker?.name || entry.party}
+                  </Text>
+                ) : null}
+              </View>
+              {entry.description ? (
+                <Text style={styles.descText} numberOfLines={1}>
+                  📝 {entry.description}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Quick Reason Chips */}
+          <View style={styles.reasonCard}>
+            <Text style={styles.sectionLabel}>REASON FOR VOIDING *</Text>
+            <View style={styles.chipsRow}>
+              {VOID_REASONS.map((r) => {
+                const isSelected = reason === r;
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => setReason(r)}
+                    style={[
+                      styles.chip,
+                      isSelected && styles.chipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isSelected && styles.chipTextActive,
+                      ]}
+                    >
+                      {r}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Reason Input */}
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Or enter custom reason..."
+              placeholderTextColor="#94A3B8"
+              style={[
+                styles.input,
+                Platform.OS === 'web'
+                  ? ({ outlineStyle: 'none', outlineWidth: 0 } as any)
+                  : undefined,
+              ]}
+            />
+          </View>
+        </ScrollView>
+
+        {/* Sticky Footer */}
+        <View style={styles.footer}>
+          <View style={[styles.footerInner, isDesktop && styles.footerInnerDesktop]}>
+            <Pressable
+              onPress={() => !busy && onClose()}
+              disabled={busy}
+              style={({ pressed }) => [
+                styles.cancelBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleConfirm}
+              disabled={busy}
+              style={({ pressed }) => [
+                styles.confirmBtn,
+                busy && { opacity: 0.6 },
+                pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <AppIcon name="trash" size={15} color="#FFFFFF" />
+                  <Text style={styles.confirmBtnText}>Void Entry</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  pageRoot: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  topHeader: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', outlineStyle: 'none' as any } : {}),
+  },
+  topHeaderTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  dialogBodyDesktop: {
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
+    paddingVertical: 18,
+  },
+  reasonCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 10,
+  },
+  footerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  footerInnerDesktop: {
+    maxWidth: 532,
+    alignSelf: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -507,39 +534,40 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 8,
+    height: 42,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#475569',
   },
   confirmBtn: {
-    flex: 1.3,
+    flex: 1,
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    paddingVertical: 9,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#DC2626',
   },
   confirmBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 });

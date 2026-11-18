@@ -5,6 +5,7 @@ import { WorkerService } from '../workers/WorkerService.mjs';
 import { AttendanceService } from '../attendance/AttendanceService.mjs';
 import { EntryService } from '../entries/EntryService.mjs';
 import { LoginService } from '../auth/LoginService.mjs';
+import { KhataService } from '../khata/KhataService.mjs';
 import prisma from '../../prisma.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -12,6 +13,96 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 // In-memory snapshot cache (orgId:userId -> { data, timestamp })
 const snapshotCache = new Map();
 const SNAPSHOT_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+// In-memory recent idempotency cache (orgId:key -> { hash, result, timestamp })
+const recentCommandCache = new Map();
+const COMMAND_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const COMMAND_CACHE_MAX = 500;
+
+const formatDateOnly = (d) =>
+  d instanceof Date ? d.toISOString().slice(0, 10) : String(d || '').slice(0, 10);
+
+const formatSite = (s) => ({
+  ...s,
+  org_id: s.orgId,
+  owner_name: s.ownerName,
+  work_type: s.workType,
+  contract_amount: Number(s.contractAmount),
+  quantity: Number(s.quantity ?? 1),
+  unit_rate: Number(s.unitRate),
+  remaining_estimate: Number(s.remainingEstimate),
+  start_date: formatDateOnly(s.startDate),
+  end_date: s.endDate ? formatDateOnly(s.endDate) : null,
+});
+
+const formatWorker = (w) => ({
+  ...w,
+  org_id: w.orgId,
+  daily_rate: Number(w.dailyRate),
+  overtime_rate: Number(w.overtimeRate),
+});
+
+const formatAttendance = (a) => ({
+  ...a,
+  org_id: a.orgId,
+  site_id: a.siteId,
+  worker_id: a.workerId,
+  date: formatDateOnly(a.date),
+  units: Number(a.units),
+  daily_rate: Number(a.dailyRate),
+  overtime_rate: Number(a.overtimeRate),
+  overtime_minutes: a.overtimeMinutes,
+  amount: Number(a.amount),
+});
+
+const formatEntry = (e) => ({
+  ...e,
+  org_id: e.orgId,
+  site_id: e.siteId,
+  worker_id: e.workerId,
+  supplier_id: e.supplierId,
+  linked_entry_id: e.linkedEntryId,
+  date: formatDateOnly(e.date),
+  amount: Number(e.amount),
+  quantity: e.quantity != null ? Number(e.quantity) : null,
+  voided_at: e.voidedAt,
+  void_reason: e.voidReason,
+});
+
+const formatKhataParty = (p) => ({
+  ...p,
+  org_id: p.orgId,
+  worker_id: p.workerId,
+  reminder_date: p.reminderDate ? formatDateOnly(p.reminderDate) : null,
+  created_at: p.createdAt,
+  updated_at: p.updatedAt,
+});
+
+const formatKhataEntry = (e) => ({
+  ...e,
+  org_id: e.orgId,
+  party_id: e.partyId,
+  isDebit: Boolean(e.isDebit),
+  is_debit: Boolean(e.isDebit),
+  proofUrl: e.proofUrl || '',
+  proof_url: e.proofUrl || '',
+  proofName: e.proofName || '',
+  proof_name: e.proofName || '',
+  proofMime: e.proofMime || '',
+  proof_mime: e.proofMime || '',
+  date: formatDateOnly(e.date),
+  amount: Number(e.amount),
+  created_at: e.createdAt,
+  updated_at: e.updatedAt,
+});
+
+function rememberCommand(cacheKey, digest, result) {
+  if (recentCommandCache.size >= COMMAND_CACHE_MAX) {
+    const oldestKey = recentCommandCache.keys().next().value;
+    if (oldestKey) recentCommandCache.delete(oldestKey);
+  }
+  recentCommandCache.set(cacheKey, { hash: digest, result, timestamp: Date.now() });
+}
 
 export class SyncService {
   static invalidateSnapshotCache(orgId) {
@@ -33,8 +124,8 @@ export class SyncService {
       return cached.data;
     }
 
-    // Run all 7 database queries concurrently in a single Promise.all
-    const [org, user, sites, workers, attendances, entries, audits] = await Promise.all([
+    // Run all 9 database queries concurrently in a single Promise.all
+    const [org, user, sites, workers, attendances, entries, audits, khataParties, khataEntries] = await Promise.all([
       prisma.organization.findUnique({
         where: { id: orgId },
         select: { id: true, name: true, revision: true },
@@ -48,52 +139,17 @@ export class SyncService {
       prisma.attendance.findMany({ where: { orgId }, orderBy: { date: 'asc' } }),
       prisma.entry.findMany({ where: { orgId }, orderBy: { date: 'asc' } }),
       prisma.audit.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      prisma.khataParty.findMany({ where: { orgId }, orderBy: { updatedAt: 'desc' } }),
+      prisma.khataEntry.findMany({ where: { orgId }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] }),
     ]);
 
     // Format for frontend compatibility (both snake_case and camelCase)
-    const formattedSites = sites.map(s => ({
-      ...s,
-      org_id: s.orgId,
-      owner_name: s.ownerName,
-      work_type: s.workType,
-      contract_amount: Number(s.contractAmount),
-      unit_rate: Number(s.unitRate),
-      remaining_estimate: Number(s.remainingEstimate),
-      start_date: s.startDate.toISOString().slice(0, 10),
-      end_date: s.endDate ? s.endDate.toISOString().slice(0, 10) : null,
-    }));
-
-    const formattedWorkers = workers.map(w => ({
-      ...w,
-      org_id: w.orgId,
-      daily_rate: Number(w.dailyRate),
-      overtime_rate: Number(w.overtimeRate),
-    }));
-
-    const formattedAttendance = attendances.map(a => ({
-      ...a,
-      org_id: a.orgId,
-      site_id: a.siteId,
-      worker_id: a.workerId,
-      date: a.date.toISOString().slice(0, 10),
-      daily_rate: Number(a.dailyRate),
-      overtime_rate: Number(a.overtimeRate),
-      overtime_minutes: a.overtimeMinutes,
-      amount: Number(a.amount),
-    }));
-
-    const formattedEntries = entries.map(e => ({
-      ...e,
-      org_id: e.orgId,
-      site_id: e.siteId,
-      worker_id: e.workerId,
-      supplier_id: e.supplierId,
-      linked_entry_id: e.linkedEntryId,
-      date: e.date.toISOString().slice(0, 10),
-      amount: Number(e.amount),
-      voided_at: e.voidedAt,
-      void_reason: e.voidReason,
-    }));
+    const formattedSites = sites.map(formatSite);
+    const formattedWorkers = workers.map(formatWorker);
+    const formattedAttendance = attendances.map(formatAttendance);
+    const formattedEntries = entries.map(formatEntry);
+    const formattedKhataParties = khataParties.map(formatKhataParty);
+    const formattedKhataEntries = khataEntries.map(formatKhataEntry);
 
     const formattedAudits = audits.map(a => ({
       action: a.action,
@@ -108,6 +164,8 @@ export class SyncService {
       workers: formattedWorkers,
       attendance: formattedAttendance,
       entries: formattedEntries,
+      khataParties: formattedKhataParties,
+      khataEntries: formattedKhataEntries,
       audit: formattedAudits,
     };
 
@@ -122,65 +180,148 @@ export class SyncService {
   static async executeCommand(orgId, userId, command) {
     const { key, action, entity_id, data } = command;
     const digest = hash(JSON.stringify({ action, entity_id, data }));
+    const idempCacheKey = `${orgId}:${key}`;
 
-    // Check idempotency
-    const existingRequest = await prisma.request.findUnique({
-      where: { orgId_key: { orgId, key } },
-    });
-    if (existingRequest) {
-      if (existingRequest.hash !== digest) {
+    // Fast in-memory idempotency check (0ms)
+    const memCached = recentCommandCache.get(idempCacheKey);
+    if (memCached && (Date.now() - memCached.timestamp < COMMAND_CACHE_TTL_MS)) {
+      if (memCached.hash !== digest) {
         const err = new Error('Request key reused with different data');
         err.status = 409;
         throw err;
       }
-      return existingRequest.result;
+      return memCached.result;
     }
 
     let before = null;
     let after = null;
     let entity = entity_id || randomUUID();
 
+    // Overlap idempotency lookup with pre-read for update actions (saves 1 full DB round-trip)
+    let existingRequest = null;
+    if (action === 'site.update') {
+      [existingRequest, before] = await Promise.all([
+        prisma.request.findUnique({ where: { orgId_key: { orgId, key } } }),
+        SiteService.getById(orgId, entity).catch(() => null),
+      ]);
+    } else if (action === 'worker.update') {
+      [existingRequest, before] = await Promise.all([
+        prisma.request.findUnique({ where: { orgId_key: { orgId, key } } }),
+        WorkerService.getById(orgId, entity).catch(() => null),
+      ]);
+    } else if (action === 'khata.partyUpdate') {
+      [existingRequest, before] = await Promise.all([
+        prisma.request.findUnique({ where: { orgId_key: { orgId, key } } }),
+        KhataService.getPartyById(orgId, entity).catch(() => null),
+      ]);
+    } else {
+      existingRequest = await prisma.request.findUnique({
+        where: { orgId_key: { orgId, key } },
+      });
+    }
+
+    if (existingRequest) {
+      if (existingRequest.hash !== digest) {
+        const err = new Error('Request key reused with different data');
+        err.status = 409;
+        throw err;
+      }
+      rememberCommand(idempCacheKey, digest, existingRequest.result);
+      return existingRequest.result;
+    }
+
+    let response;
+
     if (action.startsWith('site.')) {
       if (action === 'site.update') {
-        before = await SiteService.getById(orgId, entity);
-        after = await SiteService.update(orgId, entity, data);
+        if (!before) {
+          const err = new Error('Site not found');
+          err.status = 404;
+          throw err;
+        }
+        after = await SiteService.update(orgId, entity, data, before);
       } else {
         after = await SiteService.create(orgId, data, entity);
       }
+      response = { record: formatSite(after) };
     } else if (action.startsWith('worker.')) {
       if (action === 'worker.update') {
-        before = await WorkerService.getById(orgId, entity);
-        after = await WorkerService.update(orgId, entity, data);
+        if (!before) {
+          const err = new Error('Worker not found');
+          err.status = 404;
+          throw err;
+        }
+        after = await WorkerService.update(orgId, entity, data, before);
       } else {
         after = await WorkerService.create(orgId, data, entity);
       }
+      response = { record: formatWorker(after) };
     } else if (action === 'attendance.save') {
       after = await AttendanceService.save(orgId, data);
+      response = { record: formatAttendance(after) };
+    } else if (action === 'attendance.bulkSave') {
+      after = await AttendanceService.saveBulk(orgId, data);
+      response = { records: after.map(formatAttendance) };
     } else if (action === 'entry.create') {
       after = await EntryService.create(orgId, data, entity);
+      response = { record: formatEntry(after) };
     } else if (action === 'profile.update') {
+      const updates = [];
       if (data.name) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { name: String(data.name).trim() },
-        });
+        updates.push(
+          prisma.user.update({
+            where: { id: userId },
+            data: { name: String(data.name).trim() },
+          })
+        );
       }
       if (data.organization_name) {
-        await prisma.organization.update({
-          where: { id: orgId },
-          data: { name: String(data.organization_name).trim() },
-        });
+        updates.push(
+          prisma.organization.update({
+            where: { id: orgId },
+            data: { name: String(data.organization_name).trim() },
+          })
+        );
+      }
+      if (updates.length > 0) {
+        await Promise.all(updates);
       }
       after = { user_id: userId, name: data.name, organization_name: data.organization_name };
+      response = { record: after };
+    } else if (action === 'khata.partyCreate') {
+      after = await KhataService.createParty(orgId, data, entity);
+      response = { record: formatKhataParty(after) };
+    } else if (action === 'khata.partyUpdate') {
+      if (!before) {
+        const err = new Error('Khata person not found');
+        err.status = 404;
+        throw err;
+      }
+      after = await KhataService.updateParty(orgId, entity, data, before);
+      response = { record: formatKhataParty(after) };
+    } else if (action === 'khata.partyDelete') {
+      after = await KhataService.deleteParty(orgId, entity);
+      response = { record: after };
+    } else if (action === 'khata.entryCreate') {
+      after = await KhataService.createEntry(orgId, data, entity);
+      response = { record: formatKhataEntry(after) };
+    } else if (action === 'khata.entryUpdate') {
+      after = await KhataService.updateEntry(orgId, entity, data);
+      response = { record: formatKhataEntry(after) };
+    } else if (action === 'khata.entryDelete') {
+      after = await KhataService.deleteEntry(orgId, entity);
+      response = { record: after };
     } else {
       // entry.void
       after = await EntryService.void(orgId, entity, data?.reason);
+      response = { record: formatEntry(after) };
     }
 
-    const response = { record: after };
+    // Cache idempotency result in memory and invalidate snapshot cache immediately
+    rememberCommand(idempCacheKey, digest, response);
+    SyncService.invalidateSnapshotCache(orgId);
 
-    // Increment revision, record audit and idempotency request in parallel
-    await Promise.all([
+    const bookkeeping = Promise.all([
       prisma.organization.update({
         where: { id: orgId },
         data: { revision: { increment: 1 } },
@@ -195,18 +336,27 @@ export class SyncService {
           afterData: JSON.stringify(after),
         },
       }),
-      prisma.request.create({
-        data: {
+      prisma.request.upsert({
+        where: { orgId_key: { orgId, key } },
+        create: {
           orgId,
           key,
           hash: digest,
           result: response,
         },
+        update: {},
       }),
     ]);
 
-    // Invalidate cached snapshot for this organization so next read is 100% fresh
-    SyncService.invalidateSnapshotCache(orgId);
+    if (process.env.VERCEL) {
+      // Serverless runtime must await all DB writes before returning response
+      await bookkeeping;
+    } else {
+      // Persistent server: primary data is already safely committed in PostgreSQL
+      bookkeeping.catch((err) => {
+        console.error('[SyncService] Background bookkeeping error:', err?.message || err);
+      });
+    }
 
     return response;
   }

@@ -154,7 +154,6 @@ export function ReportsPage({
     <View style={styles.pageWrapper}>
       <TopNavBar
         title={t('reportsTitle', 'Reports & Statements')}
-        subtitle={t('reportsSubtitle', 'Business performance, site margins & audit history')}
         userInitials={data.user.name}
         organizationName={data.organization.name}
         onOpenProfile={onOpenProfile}

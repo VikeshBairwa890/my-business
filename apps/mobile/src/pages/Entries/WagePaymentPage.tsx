@@ -20,6 +20,7 @@ import { Snapshot, Row } from '../../types';
 import { money, workerSummary } from '../../finance';
 import { today } from '../../forms';
 import { useLanguage } from '../../i18n';
+import { showToast } from '../../context/ToastContext';
 
 export interface WagePaymentPageProps {
   data: Snapshot;
@@ -97,16 +98,17 @@ export function WagePaymentPage({
   const handleSavePayment = () => {
     setLocalError('');
     if (!formSiteId) {
-      setLocalError(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site');
+      showToast(lang === 'hi' ? 'कृपया कार्य स्थल (Site) चुनें' : 'Please select a work site', 'e');
       return;
     }
     if (!formWorkerId) {
-      setLocalError(lang === 'hi' ? 'कृपया मजदूर (Worker) चुनें' : 'Please select a worker');
+      showToast(lang === 'hi' ? 'कृपया मजदूर (Worker) चुनें' : 'Please select a worker', 'e');
       return;
     }
     if (!formAmount || Number(formAmount) <= 0) {
-      setLocalError(
-        lang === 'hi' ? 'कृपया सही भुगतान राशि भरें' : 'Please enter a valid payment amount'
+      showToast(
+        lang === 'hi' ? 'कृपया सही भुगतान राशि भरें' : 'Please enter a valid payment amount',
+        'e'
       );
       return;
     }
@@ -137,11 +139,6 @@ export function WagePaymentPage({
       {/* 1. TOP NAVIGATION BAR */}
       <TopNavBar
         title={lang === 'hi' ? 'लेबर भुगतान (मजदूरी दी)' : 'Labour Wage Payment'}
-        subtitle={
-          lang === 'hi'
-            ? 'मजदूरों को दी गई दैनिक हाजिरी व एडवांस मजदूरी'
-            : 'Daily wage payouts, advance & balance settlements'
-        }
         icon="cash"
         userInitials={data.user?.name}
         organizationName={data.organization?.name}
@@ -663,40 +660,44 @@ const styles = StyleSheet.create({
   formActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 8,
     width: '100%',
   },
   formCancelBtn: {
     flex: 1,
-    minHeight: 46,
-    paddingVertical: 12,
-    borderRadius: 10,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   formCancelBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   formSaveBtn: {
     flex: 1,
-    minHeight: 46,
+    height: 46,
     flexDirection: 'row',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#16A34A',
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   formSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 

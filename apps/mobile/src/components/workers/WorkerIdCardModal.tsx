@@ -73,12 +73,12 @@ export function WorkerIdCardModal({
 
   const initials = worker.name
     ? worker.name
-        .trim()
-        .split(/\s+/)
-        .map((p: string) => p[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
+      .trim()
+      .split(/\s+/)
+      .map((p: string) => p[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
     : 'W';
 
   const handlePrintPdf = async () => {
@@ -169,14 +169,19 @@ export function WorkerIdCardModal({
               {/* Card Inner Body */}
               <View style={styles.idCardBody}>
                 {/* Photo Avatar Frame */}
-                <View style={styles.photoFrame}>
+                <View style={[styles.photoFrame, worker.photo ? { backgroundColor: '#FFFFFF' } : null]}>
                   {worker.photo ? (
                     <Image source={{ uri: worker.photo }} style={styles.photoImg} />
                   ) : (
                     <Text style={styles.photoInitials}>{initials}</Text>
                   )}
-                  <View style={styles.verifiedShield}>
-                    <AppIcon name="checkmark" size={11} color="#FFFFFF" />
+                  <View
+                    style={[
+                      styles.verifiedShield,
+                      !worker.active && { backgroundColor: '#EF4444' },
+                    ]}
+                  >
+                    <AppIcon name={worker.active ? 'checkmark' : 'close'} size={11} color="#FFFFFF" />
                   </View>
                 </View>
 

@@ -20,6 +20,7 @@ import { Snapshot } from '../../types';
 import { money } from '../../finance';
 import { today } from '../../forms';
 import { useLanguage } from '../../i18n';
+import { showToast } from '../../context/ToastContext';
 
 export interface ReceivePaymentPageProps {
   data: Snapshot;
@@ -75,11 +76,11 @@ export function ReceivePaymentPage({
   const handleSavePayment = () => {
     setLocalError('');
     if (!formSiteId) {
-      setLocalError('Please select a work site');
+      showToast('Please select a work site', 'e');
       return;
     }
     if (!formAmount || Number(formAmount) <= 0) {
-      setLocalError('Please enter a valid amount');
+      showToast('Please enter a valid amount', 'e');
       return;
     }
 
@@ -107,7 +108,6 @@ export function ReceivePaymentPage({
       {/* 1. TOP NAVIGATION BAR */}
       <TopNavBar
         title={t('receivePayment', 'Payment In Register')}
-        subtitle={t('receiveSubtitle', 'Client receipts, milestone payments & incoming cashflow')}
         icon="arrow-down-circle"
         userInitials={data.user?.name}
         organizationName={data.organization?.name}
@@ -472,36 +472,44 @@ const styles = StyleSheet.create({
   formActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 8,
     width: '100%',
   },
   formCancelBtn: {
     flex: 1,
-    minHeight: 46,
-    paddingVertical: 12,
-    borderRadius: 10,
+    height: 46,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   formCancelBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   formSaveBtn: {
     flex: 1,
-    minHeight: 46,
+    height: 46,
     flexDirection: 'row',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
-  formSaveBtnText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  formSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 });

@@ -17,6 +17,7 @@ import { AppIcon } from '../../components/icons/AppIcon';
 import { request, UserInfo } from '../../api';
 import { RedirectingScreen } from '../../components/common/RedirectingScreen';
 import { Colors } from '../../theme/colors';
+import { showToast } from '../../context/ToastContext';
 
 interface SignUpPageProps {
   onLogin: (token: string, user?: UserInfo) => Promise<void>;
@@ -110,27 +111,27 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
     const cleanPhone = phone.trim().replace(/\D/g, '');
 
     if (!cleanName) {
-      setError('Please enter your full name.');
+      showToast('Please enter your full name', 'e');
       return;
     }
     if (!cleanOrg) {
-      setError('Please enter your business or contractor firm name.');
+      showToast('Please enter your business or contractor firm name', 'e');
       return;
     }
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Please enter a valid email address.');
+      showToast('Please enter a valid email address', 'e');
       return;
     }
     if (cleanPhone && cleanPhone.length !== 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+      showToast('Please enter a valid 10-digit mobile number', 'e');
       return;
     }
     if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+      showToast('Password must be at least 8 characters long', 'e');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match. Please verify your password.');
+      showToast('Passwords do not match. Please verify your password', 'e');
       return;
     }
 
@@ -150,7 +151,7 @@ export function SignUpPage({ onLogin, onNavigateToLogin }: SignUpPageProps) {
       await new Promise((r) => setTimeout(r, 350));
       await onLogin(result.token, result.user);
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please check your information and retry.');
+      showToast(err.message || 'Registration failed. Please check your information and retry.', 'e');
       setIsRedirecting(false);
       setBusy(false);
     }

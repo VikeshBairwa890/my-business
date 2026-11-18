@@ -1121,3 +1121,7 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
 });
+
+
+export { VoidEntryPage } from './VoidEntryPage';
+export type { VoidEntryPageProps } from './VoidEntryPage';
