@@ -37,9 +37,17 @@ export function BillImageViewerModal({
 
   if (!visible || !imageUrl) return null;
 
+  const isPdf =
+    title.toLowerCase().endsWith('.pdf') ||
+    imageUrl.toLowerCase().includes('.pdf') ||
+    imageUrl.startsWith('data:application/pdf') ||
+    imageUrl.includes('application/pdf');
+
   const handleDownload = () => {
     if (Platform.OS === 'web') {
-      triggerBrowserDownload(imageUrl, `${title.replace(/\s+/g, '_')}.jpg`);
+      const ext = isPdf ? 'pdf' : 'jpg';
+      const cleanName = title.toLowerCase().endsWith(`.${ext}`) ? title : `${title}.${ext}`;
+      triggerBrowserDownload(imageUrl, cleanName);
     }
   };
 
@@ -55,8 +63,8 @@ export function BillImageViewerModal({
           {/* Header Bar */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.iconCircle}>
-                <AppIcon name="receipt" size={18} color="#FFFFFF" />
+              <View style={[styles.iconCircle, isPdf && { backgroundColor: '#DC2626' }]}>
+                <AppIcon name={isPdf ? 'document-text' : 'receipt'} size={14} color="#FFFFFF" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle} numberOfLines={1}>
@@ -84,9 +92,10 @@ export function BillImageViewerModal({
                     styles.actionBtn,
                     pressed && { opacity: 0.7 },
                   ]}
-                  accessibilityLabel="Download Bill Photo"
+                  accessibilityLabel={isPdf ? 'Download PDF' : 'Download Photo'}
+                  hitSlop={6}
                 >
-                  <AppIcon name="download-outline" size={20} color="#FFFFFF" />
+                  <AppIcon name="download-outline" size={15} color="#FFFFFF" />
                 </Pressable>
               ) : null}
 
@@ -96,20 +105,50 @@ export function BillImageViewerModal({
                   styles.closeBtn,
                   pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
-                accessibilityLabel="Close photo viewer"
+                accessibilityLabel="Close viewer"
+                hitSlop={6}
               >
-                <AppIcon name="close" size={22} color="#FFFFFF" />
+                <AppIcon name="close" size={15} color="#FFFFFF" />
               </Pressable>
             </View>
           </View>
 
-          {/* Image Container */}
+          {/* Document / Image Container */}
           <View style={styles.imageWrapper}>
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.image}
-              resizeMode="contain"
-            />
+            {Platform.OS === 'web' && isPdf ? (
+              React.createElement('iframe', {
+                src: imageUrl,
+                title,
+                style: {
+                  width: '100%',
+                  height: '100%',
+                  minHeight: 380,
+                  border: 'none',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 8,
+                },
+              })
+            ) : Platform.OS === 'web' ? (
+              React.createElement('img', {
+                src: imageUrl,
+                alt: title,
+                style: {
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block',
+                  borderRadius: 6,
+                },
+              })
+            ) : (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+            )}
           </View>
 
           {/* Footer Note */}
@@ -134,91 +173,102 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
   },
   containerDesktop: {
+    width: '92%',
     maxWidth: 900,
-    maxHeight: '92%',
+    height: '90%',
+    maxHeight: '90%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#0F172A',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     flex: 1,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94A3B8',
-    marginTop: 2,
+    marginTop: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   actionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(239, 68, 68, 0.85)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   imageWrapper: {
     flex: 1,
+    width: '100%',
+    height: '100%',
+    minHeight: 320,
     padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#020617',
   },
   image: {
     width: '100%',
     height: '100%',
   },
   footer: {
-    paddingVertical: 10,
+    paddingVertical: 7,
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    backgroundColor: '#0F172A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   footerText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     fontStyle: 'italic',
   },

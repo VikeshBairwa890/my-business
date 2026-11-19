@@ -43,6 +43,7 @@ export class KhataService {
     const rawCat = String(data.category || 'FRIEND').toUpperCase();
     const category = VALID_CATEGORIES.has(rawCat) ? rawCat : 'FRIEND';
     const phone = String(data.phone || '').trim();
+    const photo = String(data.photo || data.avatar || '').trim();
     const notes = String(data.notes || '').trim();
     const workerId = data.workerId || data.worker_id || null;
     const reminderDate = parseOptionalDate(data.reminderDate || data.reminder_date);
@@ -53,6 +54,7 @@ export class KhataService {
         orgId,
         name,
         phone,
+        photo,
         category,
         workerId,
         notes,
@@ -81,6 +83,9 @@ export class KhataService {
       updateData.name = name;
     }
     if (data.phone !== undefined) updateData.phone = String(data.phone || '').trim();
+    if (data.photo !== undefined || data.avatar !== undefined) {
+      updateData.photo = String(data.photo !== undefined ? data.photo : data.avatar || '').trim();
+    }
     if (data.category !== undefined) {
       const rawCat = String(data.category || 'FRIEND').toUpperCase();
       updateData.category = VALID_CATEGORIES.has(rawCat) ? rawCat : 'FRIEND';

@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../theme/colors';
 import { TopNavBar } from '../../components/common/TopNavBar';
 import { Snapshot } from '../../types';
@@ -42,16 +42,22 @@ export interface BanksPageProps {
 const STORAGE_KEY = 'thekabook_bank_accounts_v1';
 const PROFILE_KEY = 'thekabook_contractor_profile_v3';
 
-const POPULAR_BANKS = [
-  'State Bank of India',
-  'HDFC Bank',
-  'ICICI Bank',
-  'Punjab National Bank',
-  'Bank of Baroda',
-  'Axis Bank',
-  'Kotak Mahindra Bank',
-  'Canara Bank',
-];
+// Brand colors for Indian banks (fintech aesthetic)
+const getBankBrandColor = (bankName: string): string => {
+  const lower = (bankName || '').toLowerCase();
+  if (lower.includes('state bank') || lower.includes('sbi')) return '#0A3B7E';
+  if (lower.includes('hdfc')) return '#004C8F';
+  if (lower.includes('icici')) return '#B82C10';
+  if (lower.includes('axis')) return '#97144D';
+  if (lower.includes('baroda') || lower.includes('bob')) return '#F26522';
+  if (lower.includes('punjab') || lower.includes('pnb')) return '#A20000';
+  if (lower.includes('kotak')) return '#ED1C24';
+  if (lower.includes('canara')) return '#0091DA';
+  if (lower.includes('union')) return '#005A9C';
+  if (lower.includes('indusind')) return '#8B181B';
+  if (lower.includes('yes bank')) return '#003366';
+  return '#1E40AF';
+};
 
 export function BanksPage({
   data,
@@ -187,7 +193,7 @@ export function BanksPage({
   const handleOpenAdd = () => {
     setEditingId(null);
     setBankName('');
-    setAccountHolder(data?.user?.name || '');
+    setAccountHolder('');
     setAccountNumber('');
     setIfscCode('');
     setAccountType('Current');
@@ -232,7 +238,7 @@ export function BanksPage({
           return {
             ...item,
             bankName: bankName.trim(),
-            accountHolder: accountHolder.trim() || 'Contractor',
+            accountHolder: accountHolder.trim(),
             accountNumber: accountNumber.trim(),
             ifscCode: ifscCode.trim().toUpperCase(),
             accountType,
@@ -247,7 +253,7 @@ export function BanksPage({
       const newAcc: BankAccount = {
         id: `bank-${Date.now()}`,
         bankName: bankName.trim(),
-        accountHolder: accountHolder.trim() || 'Contractor',
+        accountHolder: accountHolder.trim(),
         accountNumber: accountNumber.trim(),
         ifscCode: ifscCode.trim().toUpperCase(),
         accountType,
@@ -361,28 +367,6 @@ export function BanksPage({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.formPageCard}>
-              {/* Popular Banks Chips */}
-              <Text style={styles.inputLabel}>QUICK SELECT BANK</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.bankChipsScroll}
-              >
-                {POPULAR_BANKS.map((b) => (
-                  <Pressable
-                    key={b}
-                    style={[styles.bankChip, bankName === b && styles.bankChipSelected]}
-                    onPress={() => setBankName(b)}
-                  >
-                    <Text
-                      style={[styles.bankChipText, bankName === b && styles.bankChipTextSelected]}
-                    >
-                      {b}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-
               {/* Bank Name Field */}
               <Text style={styles.inputLabel}>BANK NAME *</Text>
               <TextInput
@@ -515,8 +499,7 @@ export function BanksPage({
             style={({ pressed }) => [styles.addNavBtn, pressed && styles.btnPressed]}
             onPress={handleOpenAdd}
           >
-            <Ionicons name="add" size={17} color="#2563EB" />
-            <Text style={styles.addNavBtnText}>Add Bank</Text>
+            <Text style={styles.addNavBtnText}>Add</Text>
           </Pressable>
         }
       />
@@ -526,163 +509,179 @@ export function BanksPage({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Informational Banner */}
-        <View style={styles.infoBanner}>
-          <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-          <Text style={styles.infoBannerText}>
-            Primary bank details will automatically be printed on client bill invoices, PDF statements, and payment receipts.
+        {/* 2. LIST OF SAVED BANK ACCOUNTS */}
+        {accounts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="bank-outline" size={32} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>No Bank Accounts Added</Text>
+            <Text style={styles.emptySub}>
+              Add your business account to show bank details on invoices and receipts.
+            </Text>
+            <Pressable style={styles.emptyAddBtn} onPress={handleOpenAdd}>
+              <Text style={styles.emptyAddBtnText}>Add Bank Account</Text>
+            </Pressable>
+          </View>
+        ) : (
+          accounts.map((acc) => {
+            const isRevealed = revealedIds.has(acc.id);
+            const maskedNumber =
+              acc.accountNumber.length > 4
+                ? `•••• •••• ${acc.accountNumber.slice(-4)}`
+                : acc.accountNumber;
+            const bankColor = getBankBrandColor(acc.bankName);
+
+            return (
+              <View
+                key={acc.id}
+                style={[
+                  styles.bankCard,
+                  acc.isPrimary && styles.bankCardPrimary,
+                ]}
+              >
+                {/* Card Header: Real Bank Icon + Name/Type + Primary Badge */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.bankTitleRow}>
+                    <View style={[styles.bankLogoCircle, { backgroundColor: bankColor }]}>
+                      <MaterialCommunityIcons
+                        name="bank"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.bankNameText} numberOfLines={1}>
+                        {acc.bankName}
+                      </Text>
+                      <Text style={styles.accountTypeSub}>
+                        {acc.accountType} Account
+                      </Text>
+                    </View>
+                  </View>
+
+                  {acc.isPrimary ? (
+                    <View style={styles.primaryBadge}>
+                      <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                      <Text style={styles.primaryBadgeText}>Primary</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={({ pressed }) => [styles.setPrimaryBtn, pressed && styles.btnPressed]}
+                      onPress={() => handleSetPrimary(acc.id)}
+                    >
+                      <Text style={styles.setPrimaryBtnText}>Make Default</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* 2-Column Body: Left (Name, A/C No) | Right (IFSC, UPI) */}
+                <View style={styles.cardTwoColBody}>
+                  {/* Left Column */}
+                  <View style={styles.cardCol}>
+                    <View style={styles.fieldBlock}>
+                      <Text style={styles.fieldLabel}>NAME</Text>
+                      <Text style={styles.fieldValueBold} numberOfLines={1}>
+                        {acc.accountHolder || data?.user?.name || 'Contractor'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.fieldBlock}>
+                      <Text style={styles.fieldLabel}>A/C NO</Text>
+                      <View style={styles.accNumberInlineRow}>
+                        <Text style={styles.accNumberText} numberOfLines={1}>
+                          {isRevealed ? acc.accountNumber : maskedNumber}
+                        </Text>
+                        <Pressable
+                          style={styles.inlineIconBtn}
+                          onPress={() => toggleReveal(acc.id)}
+                          hitSlop={6}
+                        >
+                          <Ionicons
+                            name={isRevealed ? 'eye-off-outline' : 'eye-outline'}
+                            size={14}
+                            color="#64748B"
+                          />
+                        </Pressable>
+                        <Pressable
+                          style={styles.inlineIconBtn}
+                          onPress={() => handleCopy(acc.accountNumber, 'Account number')}
+                          hitSlop={6}
+                        >
+                          <Ionicons name="copy-outline" size={13} color="#2563EB" />
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Vertical Divider between Columns */}
+                  <View style={styles.cardColDivider} />
+
+                  {/* Right Column */}
+                  <View style={styles.cardCol}>
+                    <View style={styles.fieldBlock}>
+                      <Text style={styles.fieldLabel}>IFSC CODE</Text>
+                      <Pressable
+                        style={styles.inlineCopyRow}
+                        onPress={() => handleCopy(acc.ifscCode, 'IFSC Code')}
+                        hitSlop={6}
+                      >
+                        <Text style={styles.ifscCodeText} numberOfLines={1}>{acc.ifscCode}</Text>
+                        <Ionicons name="copy-outline" size={11} color="#2563EB" />
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.fieldBlock}>
+                      <Text style={styles.fieldLabel}>UPI ID</Text>
+                      {acc.upiId ? (
+                        <Pressable
+                          style={styles.inlineCopyRow}
+                          onPress={() => handleCopy(acc.upiId || '', 'UPI ID')}
+                          hitSlop={6}
+                        >
+                          <Text style={styles.upiText} numberOfLines={1}>{acc.upiId}</Text>
+                          <Ionicons name="copy-outline" size={11} color="#15803D" />
+                        </Pressable>
+                      ) : (
+                        <Text style={styles.emptyFieldText}>Not set</Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Card Footer: Compact Edit & Delete */}
+                <View style={styles.cardFooter}>
+                  <Pressable
+                    style={({ pressed }) => [styles.actionEditBtn, pressed && styles.btnPressed]}
+                    onPress={() => handleOpenEdit(acc)}
+                    hitSlop={6}
+                    accessibilityLabel="Edit bank account"
+                  >
+                    <Ionicons name="create-outline" size={14} color="#2563EB" />
+                  </Pressable>
+
+                  {accounts.length > 1 ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.actionRemoveBtn, pressed && styles.btnPressed]}
+                      onPress={() => handleDeleteAccount(acc.id)}
+                    >
+                      <Ionicons name="trash-outline" size={12} color="#DC2626" />
+                      <Text style={styles.actionRemoveText}>Remove</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })
+        )}
+
+        {/* Subtle Bottom Note */}
+        <View style={styles.subtleFootnote}>
+          <Ionicons name="information-circle-outline" size={13} color="#64748B" />
+          <Text style={styles.subtleFootnoteText}>
+            Primary bank details will automatically be printed on client bill invoices & receipts.
           </Text>
         </View>
-
-        {/* 2. LIST OF SAVED BANK ACCOUNTS */}
-        {accounts.map((acc) => {
-          const isRevealed = revealedIds.has(acc.id);
-          const maskedNumber =
-            acc.accountNumber.length > 4
-              ? `•••• •••• ${acc.accountNumber.slice(-4)}`
-              : acc.accountNumber;
-
-          return (
-            <View
-              key={acc.id}
-              style={[
-                styles.bankCard,
-                acc.isPrimary && styles.bankCardPrimary,
-              ]}
-            >
-              {/* Card Header: Bank Name + Primary Tag */}
-              <View style={styles.cardHeader}>
-                <View style={styles.bankTitleRow}>
-                  <View style={[styles.bankLogoCircle, acc.isPrimary && styles.bankLogoPrimary]}>
-                    <Ionicons name="business" size={18} color={acc.isPrimary ? '#FFFFFF' : '#1E293B'} />
-                  </View>
-                  <View>
-                    <Text style={styles.bankNameText} numberOfLines={1}>
-                      {acc.bankName}
-                    </Text>
-                    <Text style={styles.accountTypeSub}>
-                      {acc.accountType} Account
-                    </Text>
-                  </View>
-                </View>
-
-                {acc.isPrimary ? (
-                  <View style={styles.primaryBadge}>
-                    <Ionicons name="checkmark-circle" size={12} color="#059669" />
-                    <Text style={styles.primaryBadgeText}>Primary</Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    style={({ pressed }) => [styles.setPrimaryBtn, pressed && styles.btnPressed]}
-                    onPress={() => handleSetPrimary(acc.id)}
-                  >
-                    <Text style={styles.setPrimaryBtnText}>Make Default</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Account Number Row */}
-              <View style={styles.accNumberRow}>
-                <View style={styles.accNumberTextWrap}>
-                  <Text style={styles.fieldLabel}>ACCOUNT NUMBER</Text>
-                  <Text style={styles.accNumberText}>
-                    {isRevealed ? acc.accountNumber : maskedNumber}
-                  </Text>
-                </View>
-
-                <View style={styles.iconActionsRow}>
-                  <Pressable
-                    style={styles.smallIconBtn}
-                    onPress={() => toggleReveal(acc.id)}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={isRevealed ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color="#64748B"
-                    />
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.smallIconBtn}
-                    onPress={() => handleCopy(acc.accountNumber, 'Account number')}
-                    hitSlop={8}
-                  >
-                    <Ionicons name="copy-outline" size={18} color="#64748B" />
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* Two Column Grid: Holder & IFSC */}
-              <View style={styles.cardDetailsGrid}>
-                <View style={styles.gridCol}>
-                  <Text style={styles.fieldLabel}>A/C HOLDER</Text>
-                  <Text style={styles.fieldValue} numberOfLines={1}>
-                    {acc.accountHolder}
-                  </Text>
-                </View>
-
-                <View style={styles.gridCol}>
-                  <Text style={styles.fieldLabel}>IFSC CODE</Text>
-                  <Pressable
-                    style={styles.ifscCopyRow}
-                    onPress={() => handleCopy(acc.ifscCode, 'IFSC Code')}
-                  >
-                    <Text style={styles.ifscCodeText}>{acc.ifscCode}</Text>
-                    <Ionicons name="copy-outline" size={13} color="#2563EB" />
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* UPI ID Row (if provided) */}
-              {acc.upiId ? (
-                <View style={styles.upiRow}>
-                  <Ionicons name="qr-code-outline" size={14} color="#D97706" />
-                  <Text style={styles.upiLabel}>UPI / VPA:</Text>
-                  <Text style={styles.upiValueText} numberOfLines={1}>
-                    {acc.upiId}
-                  </Text>
-                  <Pressable
-                    onPress={() => handleCopy(acc.upiId || '', 'UPI ID')}
-                    hitSlop={6}
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    <Ionicons name="copy-outline" size={14} color="#64748B" />
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {/* Card Footer: Edit & Delete */}
-              <View style={styles.cardFooter}>
-                <Pressable
-                  style={({ pressed }) => [styles.actionLinkBtn, pressed && styles.btnPressed]}
-                  onPress={() => handleOpenEdit(acc)}
-                >
-                  <Ionicons name="create-outline" size={16} color="#2563EB" />
-                </Pressable>
-
-                {accounts.length > 1 ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.actionLinkBtn, pressed && styles.btnPressed]}
-                    onPress={() => handleDeleteAccount(acc.id)}
-                  >
-                    <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                    <Text style={[styles.actionLinkText, { color: '#DC2626' }]}>Remove</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
-
-        {/* Big Add Account Button */}
-        <Pressable
-          style={({ pressed }) => [styles.bigAddBtn, pressed && styles.btnPressed]}
-          onPress={handleOpenAdd}
-        >
-          <Ionicons name="add-circle" size={20} color="#2563EB" />
-          <Text style={styles.bigAddBtnText}>Add Another Bank Account</Text>
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -793,69 +792,61 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 14,
     paddingBottom: 40,
+    maxWidth: 540,
+    width: '100%',
+    alignSelf: 'center',
   },
   addNavBtn: {
-    flexDirection: 'row',
+    height: 32,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#1E40AF',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 12,
+    justifyContent: 'center',
+    shadowColor: '#1E40AF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   addNavBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 12,
-    padding: 11,
-    marginBottom: 14,
-    gap: 9,
-  },
-  infoBannerText: {
-    flex: 1,
-    fontSize: 11.5,
-    color: '#166534',
-    lineHeight: 16,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 
-  /* Bank Card */
+  /* Bank Card - Sleek Compact Fintech Size */
   bankCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 12,
+    padding: 12,
+    marginBottom: 10,
     ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)' },
+      web: { boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' },
       default: { elevation: 2 },
     }),
   },
   bankCardPrimary: {
     borderColor: '#93C5FD',
     backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
-    borderLeftColor: '#2563EB',
+    borderLeftWidth: 3.5,
+    borderLeftColor: '#1E40AF',
+    ...Platform.select({
+      web: { boxShadow: '0 3px 12px rgba(30, 64, 175, 0.07)' },
+      default: { elevation: 2 },
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    marginBottom: 10,
   },
   bankTitleRow: {
     flexDirection: 'row',
@@ -865,138 +856,137 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   bankLogoCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bankLogoPrimary: {
-    backgroundColor: '#2563EB',
-  },
   bankNameText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
   },
+  accountTypeBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 1,
+  },
   accountTypeSub: {
-    fontSize: 11,
+    fontSize: 10.5,
+    fontWeight: '600',
     color: '#64748B',
     marginTop: 1,
   },
   primaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   primaryBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#059669',
   },
   setPrimaryBtn: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   setPrimaryBtnText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#475569',
   },
 
-  /* Number Row */
-  accNumberRow: {
+  /* 2-Column Card Body */
+  cardTwoColBody: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+    gap: 12,
   },
-  accNumberTextWrap: {
+  cardCol: {
     flex: 1,
+    gap: 8,
+  },
+  cardColDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: '#F1F5F9',
+  },
+  fieldBlock: {
+    minHeight: 30,
   },
   fieldLabel: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '800',
     color: '#94A3B8',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
-  accNumberText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1E293B',
-    letterSpacing: 0.5,
-  },
-  iconActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  smallIconBtn: {
-    padding: 4,
-  },
-
-  /* Grid */
-  cardDetailsGrid: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  gridCol: {
-    flex: 1,
-    paddingRight: 6,
-  },
-  fieldValue: {
-    fontSize: 12.5,
+  fieldValueBold: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: '#0F172A',
   },
-  ifscCopyRow: {
+  accNumberInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
+  accNumberText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.3,
+  },
+  inlineIconBtn: {
+    padding: 2,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  inlineCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
   ifscCodeText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#2563EB',
   },
-
-  /* UPI Row */
-  upiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FEF3C7',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 6,
-    marginBottom: 10,
-  },
-  upiLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B45309',
-  },
-  upiValueText: {
+  upiText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#92400E',
-    flex: 1,
+    color: '#15803D',
+  },
+  emptyFieldText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  subtleFootnote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  subtleFootnoteText: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
   },
 
   /* Card Footer */
@@ -1005,39 +995,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 8,
-    gap: 16,
+    borderTopColor: '#F8FAFC',
+    paddingTop: 6,
+    gap: 8,
   },
-  actionLinkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-
-  /* Big Add Button */
-  bigAddBtn: {
-    flexDirection: 'row',
+  actionEditBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-    borderStyle: 'dashed',
-    borderRadius: 14,
-    paddingVertical: 14,
-    gap: 8,
-    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
-  bigAddBtnText: {
-    fontSize: 13.5,
+  actionRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  actionRemoveText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#DC2626',
+  },
+
+  /* Empty State */
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+    marginBottom: 16,
+  },
+  emptyAddBtn: {
+    backgroundColor: '#1E40AF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  emptyAddBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 
   /* Modal */
@@ -1080,30 +1115,6 @@ const styles = StyleSheet.create({
   },
   modalCloseBtn: {
     padding: 4,
-  },
-  bankChipsScroll: {
-    marginBottom: 10,
-  },
-  bankChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  bankChipSelected: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
-  },
-  bankChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  bankChipTextSelected: {
-    color: '#2563EB',
   },
   inputLabel: {
     fontSize: 10,

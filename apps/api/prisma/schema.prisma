@@ -325,6 +325,7 @@ model KhataParty {
   orgId        String
   name         String
   phone        String       @default("")
+  photo        String?      @default("")
   category     String       @default("FRIEND") // FRIEND, LABOUR, SUPPLIER, CLIENT, OTHER
   workerId     String?
   notes        String       @default("")

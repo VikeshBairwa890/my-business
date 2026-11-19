@@ -36,6 +36,7 @@ export interface DashboardPageProps {
   onShareReport?: () => void;
   onOpenProfile?: () => void;
   onOpenNotifications?: () => void;
+  unreadNotificationCount?: number;
   onLogout?: () => void;
   onShowToast?: (msg: string, type?: string) => void;
 }
@@ -52,6 +53,7 @@ export function DashboardPage({
   onShareReport,
   onOpenProfile,
   onOpenNotifications,
+  unreadNotificationCount,
   onLogout,
   onShowToast,
 }: DashboardPageProps) {
@@ -482,25 +484,28 @@ export function DashboardPage({
             </View>
 
             {/* Notification Bell Button */}
-            <Pressable
-              onPress={() => (onOpenNotifications ? onOpenNotifications() : onNavigateTab('notifications'))}
-              style={({ pressed }) => [
-                styles.bellBtn,
-                pressed && styles.itemPressed,
-              ]}
-              accessibilityLabel="Notifications"
-            >
-              <AppIcon name="notifications-outline" size={20} color="#0F172A" />
-              {khataDueTodayCount > 0 ? (
-                <View style={styles.bellCountBadge}>
-                  <Text style={styles.bellCountText}>
-                    {khataDueTodayCount > 9 ? '9+' : khataDueTodayCount}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.bellBadgeDot} />
-              )}
-            </Pressable>
+            {(() => {
+              const activeCount = unreadNotificationCount !== undefined ? unreadNotificationCount : khataDueTodayCount;
+              return (
+                <Pressable
+                  onPress={() => (onOpenNotifications ? onOpenNotifications() : onNavigateTab('notifications'))}
+                  style={({ pressed }) => [
+                    styles.bellBtn,
+                    pressed && styles.itemPressed,
+                  ]}
+                  accessibilityLabel="Notifications"
+                >
+                  <AppIcon name="notifications-outline" size={20} color="#0F172A" />
+                  {activeCount > 0 ? (
+                    <View style={styles.bellCountBadge}>
+                      <Text style={styles.bellCountText}>
+                        {activeCount > 9 ? '9+' : activeCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })()}
           </View>
         </View>
       </View>
@@ -981,6 +986,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     position: 'relative',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
     ...Platform.select({
       web: { boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)' },
       default: { elevation: 1 },

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Platform,
   TextInput,
+  Image,
 } from 'react-native';
 import { money } from '../../../../../shared/finance';
 import { TopNavBar } from '../../components/common/TopNavBar';
@@ -20,6 +21,7 @@ import {
   getDocFromIndexedDB,
   fetchDocFromServer,
   triggerBrowserDownload,
+  viewPdfDocument,
 } from '../../storage/docStorage';
 import { Row } from '../../types';
 import {
@@ -38,6 +40,7 @@ interface KhataDetailPageProps {
   summary: PartySummary;
   allEntries: Row[];
   senderName: string;
+  senderPhone?: string;
   onBack: () => void;
   onEditParty: () => void;
   onAddEntry: (isDebit: boolean) => void;
@@ -49,6 +52,7 @@ export function KhataDetailPage({
   summary,
   allEntries,
   senderName,
+  senderPhone,
   onBack,
   onEditParty,
   onAddEntry,
@@ -67,13 +71,12 @@ export function KhataDetailPage({
   const handleOpenProof = async (entry: Row) => {
     const docId = String(entry.proof_url || entry.proofUrl || '');
     const fileName = String(entry.proof_name || entry.proofName || '');
-    const mime = String(entry.proof_mime || entry.proofMime || '');
     if (!docId) return;
 
-    const isPdf = mime.toLowerCase().includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
     let resolvedUrl = docId;
 
     if (!docId.startsWith('data:') && !docId.startsWith('http')) {
+      showToast('Opening proof attachment...', 'i');
       const local = await getDocFromIndexedDB(docId);
       if (local?.dataUrl) {
         resolvedUrl = local.dataUrl;
@@ -86,16 +89,6 @@ export function KhataDetailPage({
           return;
         }
       }
-    }
-
-    if (isPdf) {
-      if (Platform.OS === 'web') {
-        triggerBrowserDownload(resolvedUrl, fileName || 'payment_proof.pdf');
-        showToast('Opening PDF proof...', 's');
-      } else {
-        showToast('PDF proof saved', 's');
-      }
-      return;
     }
 
     setViewingProof({
@@ -115,7 +108,7 @@ export function KhataDetailPage({
   // Simple From / To Date Range Filter (empty => All entries)
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [calendarTarget, setCalendarTarget] = useState<'from' | 'to' | null>(null);
+  const [calendarTarget, setCalendarTarget] = useState<'from' | 'to' | 'due' | null>(null);
 
   const activeRange = useMemo(() => {
     const f = dmyToYmd(customFrom) || '';
@@ -152,6 +145,7 @@ export function KhataDetailPage({
         fromDate: activeRange.from,
         toDate: activeRange.to,
         periodLabel: activeRange.label,
+        orgPhone: senderPhone,
       });
       showToast(
         Platform.OS === 'web'
@@ -246,44 +240,72 @@ export function KhataDetailPage({
           <View style={styles.customRangeRow}>
             <View style={styles.customDateCol}>
               <Text style={styles.customDateLabel}>From</Text>
-              <View style={styles.customDateInputWrap}>
-                <TextInput
-                  style={styles.customDateInput}
-                  value={customFrom}
-                  onChangeText={setCustomFrom}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
-                />
-                {customFrom ? (
-                  <Pressable onPress={() => setCustomFrom('')} hitSlop={6}>
-                    <AppIcon name="close-circle" size={15} color="#CBD5E1" />
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={() => setCalendarTarget('from')} hitSlop={6}>
+              <Pressable
+                onPress={() => setCalendarTarget('from')}
+                style={({ pressed }) => [
+                  styles.customDateInputWrap,
+                  pressed && { opacity: 0.85, borderColor: Colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.customDateText,
+                    !customFrom && { color: '#94A3B8' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {customFrom || 'Select Date'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {customFrom ? (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setCustomFrom('');
+                      }}
+                      hitSlop={6}
+                    >
+                      <AppIcon name="close-circle" size={15} color="#94A3B8" />
+                    </Pressable>
+                  ) : null}
                   <AppIcon name="calendar-outline" size={16} color={Colors.primary} />
-                </Pressable>
-              </View>
+                </View>
+              </Pressable>
             </View>
 
             <View style={styles.customDateCol}>
               <Text style={styles.customDateLabel}>To</Text>
-              <View style={styles.customDateInputWrap}>
-                <TextInput
-                  style={styles.customDateInput}
-                  value={customTo}
-                  onChangeText={setCustomTo}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
-                />
-                {customTo ? (
-                  <Pressable onPress={() => setCustomTo('')} hitSlop={6}>
-                    <AppIcon name="close-circle" size={15} color="#CBD5E1" />
-                  </Pressable>
-                ) : null}
-                <Pressable onPress={() => setCalendarTarget('to')} hitSlop={6}>
+              <Pressable
+                onPress={() => setCalendarTarget('to')}
+                style={({ pressed }) => [
+                  styles.customDateInputWrap,
+                  pressed && { opacity: 0.85, borderColor: Colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.customDateText,
+                    !customTo && { color: '#94A3B8' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {customTo || 'Select Date'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {customTo ? (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setCustomTo('');
+                      }}
+                      hitSlop={6}
+                    >
+                      <AppIcon name="close-circle" size={15} color="#94A3B8" />
+                    </Pressable>
+                  ) : null}
                   <AppIcon name="calendar-outline" size={16} color={Colors.primary} />
-                </Pressable>
-              </View>
+                </View>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -334,7 +356,21 @@ export function KhataDetailPage({
         {/* Inline Due Date Quick Selector */}
         {isToGet && showDuePicker ? (
           <View style={styles.duePickerCard}>
-            <Text style={styles.duePickerTitle}>Set Collection Reminder Date</Text>
+            <View style={styles.duePickerHeader}>
+              <View style={styles.duePickerTitleRow}>
+                <AppIcon name="calendar-outline" size={13} color="#D97706" />
+                <Text style={styles.duePickerTitle}>Reminder Date</Text>
+              </View>
+              <Pressable
+                onPress={() => setShowDuePicker(false)}
+                style={({ pressed }) => [styles.dueCloseBtn, pressed && { opacity: 0.6 }]}
+                hitSlop={8}
+                accessibilityLabel="Close reminder picker"
+              >
+                <AppIcon name="close" size={13} color="#92400E" />
+              </Pressable>
+            </View>
+
             <View style={styles.dueQuickRow}>
               {[
                 { label: 'Tomorrow', d: 1 },
@@ -345,7 +381,7 @@ export function KhataDetailPage({
                 <Pressable
                   key={opt.label}
                   onPress={() => handleSetDue(addDaysYmd(opt.d))}
-                  style={styles.dueQuickBtn}
+                  style={({ pressed }) => [styles.dueQuickBtn, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={styles.dueQuickBtnText}>{opt.label}</Text>
                 </Pressable>
@@ -353,23 +389,44 @@ export function KhataDetailPage({
               {reminderDate ? (
                 <Pressable
                   onPress={() => handleSetDue(null)}
-                  style={[styles.dueQuickBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                  style={({ pressed }) => [
+                    styles.dueQuickBtn,
+                    { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+                    pressed && { opacity: 0.7 },
+                  ]}
                 >
                   <Text style={[styles.dueQuickBtnText, { color: '#DC2626' }]}>Clear</Text>
                 </Pressable>
               ) : null}
             </View>
             <View style={styles.dueCustomRow}>
-              <TextInput
-                style={styles.dueCustomInput}
-                value={customDueDate}
-                onChangeText={setCustomDueDate}
-                placeholder="DD/MM/YYYY"
-                placeholderTextColor="#94A3B8"
-              />
-              <Pressable onPress={handleApplyCustomDue} style={styles.dueApplyBtn}>
-                <Text style={styles.dueApplyText}>Set Date</Text>
+              <Pressable
+                onPress={() => setCalendarTarget('due')}
+                style={({ pressed }) => [
+                  styles.dueCustomInput,
+                  styles.dueCustomPressable,
+                  pressed && { opacity: 0.85, borderColor: '#D97706' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dueCustomText,
+                    !customDueDate && { color: '#94A3B8' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {customDueDate || 'Select Due Date'}
+                </Text>
+                <AppIcon name="calendar-outline" size={15} color="#D97706" />
               </Pressable>
+              {customDueDate ? (
+                <Pressable
+                  onPress={handleApplyCustomDue}
+                  style={({ pressed }) => [styles.dueApplyBtn, pressed && { opacity: 0.8 }]}
+                >
+                  <Text style={styles.dueApplyText}>Set Date</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -524,16 +581,28 @@ export function KhataDetailPage({
       {/* Custom Date Range Calendar Modal */}
       <CalendarPickerModal
         visible={calendarTarget !== null}
-        title={calendarTarget === 'from' ? 'Select Start Date' : 'Select End Date'}
+        title={
+          calendarTarget === 'from'
+            ? 'Select Start Date'
+            : calendarTarget === 'to'
+            ? 'Select End Date'
+            : 'Select Reminder Due Date'
+        }
         selectedDate={
           calendarTarget === 'from'
             ? dmyToYmd(customFrom) || today()
-            : dmyToYmd(customTo) || today()
+            : calendarTarget === 'to'
+            ? dmyToYmd(customTo) || today()
+            : dmyToYmd(customDueDate) || today()
         }
         onSelect={(picked) => {
           const dmy = ymdToDmy(picked);
           if (calendarTarget === 'from') setCustomFrom(dmy);
           else if (calendarTarget === 'to') setCustomTo(dmy);
+          else if (calendarTarget === 'due') {
+            setCustomDueDate(dmy);
+            handleSetDue(picked);
+          }
           setCalendarTarget(null);
         }}
         onClose={() => setCalendarTarget(null)}
@@ -546,6 +615,15 @@ const styles = StyleSheet.create({
   pageRoot: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  headerAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+    backgroundColor: '#EFF6FF',
+    resizeMode: 'cover',
   },
   headerEditIconBtn: {
     width: 36,
@@ -645,6 +723,7 @@ const styles = StyleSheet.create({
   customDateInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -652,6 +731,12 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 10,
     height: 42,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  customDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textPrimary,
   },
   customDateInput: {
     flex: 1,
@@ -772,65 +857,97 @@ const styles = StyleSheet.create({
 
   /* Due Date Picker */
   duePickerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#FFFDF7',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 10,
+    borderColor: '#FDE68A',
+    gap: 6,
+  },
+  duePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  duePickerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   duePickerTitle: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: '#92400E',
+  },
+  dueCloseBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dueQuickRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 5,
   },
   dueQuickBtn: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E2E8F0',
   },
   dueQuickBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.textSecondary,
   },
   dueCustomRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
+    marginTop: 2,
   },
   dueCustomInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: '#F8FAFC',
+    height: 30,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    fontSize: 13,
+    borderColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    fontSize: 11.5,
     fontWeight: '600',
     color: Colors.textPrimary,
     ...Platform.select({
       web: { outlineStyle: 'none' } as any,
     }),
   },
+  dueCustomPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  dueCustomText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   dueApplyBtn: {
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: '#D97706',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dueApplyText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
   },

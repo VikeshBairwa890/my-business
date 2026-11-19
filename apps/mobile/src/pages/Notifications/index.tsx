@@ -1,47 +1,37 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Platform,
   RefreshControl,
+  Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../theme/colors';
 import { TopNavBar } from '../../components/common/TopNavBar';
 import { Snapshot } from '../../types';
 import { money } from '../../finance';
-import { today } from '../../forms';
 import { showToast } from '../../context/ToastContext';
+import { openWhatsAppReminder, openSmsReminder } from '../Khata/khataUtils';
 import {
-  computePartySummary,
-  daysBetween,
-  formatShortDate,
-  openWhatsAppReminder,
-  PartySummary,
-} from '../Khata/khataUtils';
+  NotificationItem,
+  generateNotificationItems,
+  getReadNotificationIds,
+  saveReadNotificationIds,
+} from '../../storage/notificationStorage';
 
-export interface NotificationItem {
-  id: string;
-  type: 'khata' | 'payment' | 'haziri' | 'site' | 'wage' | 'system';
-  title: string;
-  message: string;
-  timeAgo: string;
-  read: boolean;
-  actionTab?: string;
-  targetId?: string;
-  amount?: number;
-  khataSummary?: PartySummary;
-}
+export { NotificationItem };
 
 export interface NotificationsPageProps {
   data?: Snapshot | null;
   onBack: () => void;
-  onNavigateTab: (tabKey: string) => void;
+  onNavigateTab: (tabKey: string, targetId?: string) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
+  readIds?: Set<string>;
+  onUpdateReadIds?: (ids: Set<string>) => void;
 }
 
 export function NotificationsPage({
@@ -50,170 +40,58 @@ export function NotificationsPage({
   onNavigateTab,
   onRefresh,
   refreshing = false,
+  readIds: externalReadIds,
+  onUpdateReadIds,
 }: NotificationsPageProps) {
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'khata' | 'payment' | 'haziri' | 'system'>('all');
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [internalReadIds, setInternalReadIds] = useState<Set<string>>(new Set());
+  const [remindItem, setRemindItem] = useState<NotificationItem | null>(null);
+
+  // Load persisted read IDs on mount if not provided externally
+  useEffect(() => {
+    if (!externalReadIds) {
+      getReadNotificationIds().then((ids) => {
+        setInternalReadIds(ids);
+      });
+    }
+  }, [externalReadIds]);
+
+  const activeReadIds = externalReadIds || internalReadIds;
   const senderName = data?.organization?.name || data?.user?.name || 'ThekaBook';
 
   // Generate dynamic contextual notifications from current snapshot data
   const rawNotifications: NotificationItem[] = useMemo(() => {
-    const list: NotificationItem[] = [];
-    const todayStr = today();
-
-    // 0. Khata Book Due Date Payment Reminders (Due Today or Overdue)
-    const khataParties = data?.khataParties ?? [];
-    const khataEntries = data?.khataEntries ?? [];
-    const dueKhata = khataParties
-      .map((p) => computePartySummary(p, khataEntries))
-      .filter((s) => s.balance > 0 && s.reminderDate && s.reminderDate <= todayStr)
-      .sort((a, b) => a.reminderDate.localeCompare(b.reminderDate));
-
-    dueKhata.forEach((s) => {
-      const overdueDays = daysBetween(s.reminderDate, todayStr);
-      const isDueToday = overdueDays <= 0;
-      list.push({
-        id: `khata-due-${s.party.id}-${s.reminderDate}`,
-        type: 'khata',
-        title: isDueToday
-          ? `Due Today: ${s.party.name} • ${money(s.balance)}`
-          : `Overdue (${overdueDays}d): ${s.party.name} • ${money(s.balance)}`,
-        message: 'Khata Book payment reminder due. Send reminder on WhatsApp.',
-        timeAgo: isDueToday ? 'Today' : formatShortDate(s.reminderDate),
-        read: false,
-        actionTab: 'khata',
-        targetId: s.party.id,
-        amount: s.balance,
-        khataSummary: s,
-      });
-    });
-
-    // 1. Recent Client Payments In
-    const recentPayments = (data?.entries || [])
-      .filter((e) => e.kind === 'RECEIPT' && !e.is_void)
-      .slice(-3)
-      .reverse();
-
-    recentPayments.forEach((entry, idx) => {
-      const site = data?.sites.find((s) => s.id === entry.site_id);
-      const siteName = site?.name || 'Work Site';
-      list.push({
-        id: `entry-${entry.id}`,
-        type: 'payment',
-        title: `Payment Received: ${money(entry.amount || 0)}`,
-        message: `Client payment received for ${siteName}. Added to hisaab ledger.`,
-        timeAgo: idx === 0 ? 'Just now' : `${idx * 2}h ago`,
-        read: false,
-        actionTab: 'ledger',
-        targetId: entry.id,
-        amount: entry.amount,
-      });
-    });
-
-    // 2. Wage Payments
-    const recentWages = (data?.entries || [])
-      .filter((e) => e.kind === 'WAGE_PAYMENT' && !e.is_void)
-      .slice(-2)
-      .reverse();
-
-    recentWages.forEach((wEntry, idx) => {
-      const worker = data?.workers.find((w) => w.id === wEntry.worker_id);
-      const workerName = worker?.name || 'Worker';
-      list.push({
-        id: `wage-${wEntry.id}`,
-        type: 'wage',
-        title: `Wage Paid: ${money(wEntry.amount || 0)}`,
-        message: `Payment disbursed to ${workerName}. Balance updated.`,
-        timeAgo: `${(idx + 1) * 3}h ago`,
-        read: false,
-        actionTab: 'team',
-        targetId: wEntry.worker_id,
-        amount: wEntry.amount,
-      });
-    });
-
-    // 3. Haziri / Attendance Reminder
-    const workerCount = data?.workers?.length || 0;
-    list.push({
-      id: 'haziri-daily-reminder',
-      type: 'haziri',
-      title: 'Daily Haziri Reminder',
-      message: workerCount > 0
-        ? `Don't forget to mark attendance for today's ${workerCount} active workers.`
-        : 'Add your team members and mark daily haziri to track attendance.',
-      timeAgo: 'Today, 08:00 AM',
-      read: false,
-      actionTab: 'attendance',
-    });
-
-    // 4. Sites Status Alert
-    const activeSites = (data?.sites || []).filter((s) => s.status !== 'COMPLETED');
-    if (activeSites.length > 0) {
-      const firstSite = activeSites[0];
-      list.push({
-        id: `site-alert-${firstSite.id}`,
-        type: 'site',
-        title: `Site Active: ${firstSite.name}`,
-        message: 'Review client progress, material invoices and upcoming contractor margins.',
-        timeAgo: 'Yesterday',
-        read: true,
-        actionTab: 'sites',
-        targetId: firstSite.id,
-      });
-    }
-
-    // 5. System & Cloud Sync Notification
-    list.push({
-      id: 'system-cloud-sync',
-      type: 'system',
-      title: '100% Cloud Ledger Protected',
-      message: 'All your work sites, attendance registers and billing records are securely backed up.',
-      timeAgo: '2 days ago',
-      read: true,
-      actionTab: 'profile',
-    });
-
-    return list;
-  }, [data]);
+    return generateNotificationItems(data, activeReadIds);
+  }, [data, activeReadIds]);
 
   // Handle Mark All Read
-  const handleMarkAllRead = () => {
-    const allIds = new Set(rawNotifications.map((n) => n.id));
-    setReadIds(allIds);
+  const handleMarkAllRead = async () => {
+    const allIds = new Set([...activeReadIds, ...rawNotifications.map((n) => n.id)]);
+    setInternalReadIds(allIds);
+    if (onUpdateReadIds) {
+      onUpdateReadIds(allIds);
+    }
+    await saveReadNotificationIds(allIds);
+    showToast('All notifications marked as read', 's');
   };
 
-  // Toggle Single Read
-  const handleItemPress = (item: NotificationItem) => {
-    setReadIds((prev) => {
-      const next = new Set(prev);
-      next.add(item.id);
-      return next;
-    });
+  // Toggle Single Read & Navigate
+  const handleItemPress = async (item: NotificationItem) => {
+    const next = new Set(activeReadIds);
+    next.add(item.id);
+    setInternalReadIds(next);
+    if (onUpdateReadIds) {
+      onUpdateReadIds(next);
+    }
+    await saveReadNotificationIds(next);
 
     if (item.actionTab) {
-      onNavigateTab(item.actionTab);
+      onNavigateTab(item.actionTab, item.targetId);
     }
   };
 
-  // Filtered List
-  const filteredList = useMemo(() => {
-    return rawNotifications.filter((item) => {
-      const isRead = item.read || readIds.has(item.id);
-      if (selectedFilter === 'unread') return !isRead;
-      if (selectedFilter === 'khata') return item.type === 'khata';
-      if (selectedFilter === 'payment') return item.type === 'payment' || item.type === 'wage' || item.type === 'khata';
-      if (selectedFilter === 'haziri') return item.type === 'haziri';
-      if (selectedFilter === 'system') return item.type === 'system' || item.type === 'site';
-      return true;
-    });
-  }, [rawNotifications, selectedFilter, readIds]);
-
   const unreadCount = useMemo(() => {
-    return rawNotifications.filter((n) => !n.read && !readIds.has(n.id)).length;
-  }, [rawNotifications, readIds]);
-
-  const khataDueCount = useMemo(() => {
-    return rawNotifications.filter((n) => n.type === 'khata').length;
-  }, [rawNotifications]);
+    return rawNotifications.filter((n) => !n.read && !activeReadIds.has(n.id)).length;
+  }, [rawNotifications, activeReadIds]);
 
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {
@@ -234,7 +112,7 @@ export function NotificationsPage({
 
   return (
     <View style={styles.pageContainer}>
-      {/* 1. STANDARDIZED PAGE HEADER (Used across all app pages) */}
+      {/* 1. STANDARDIZED PAGE HEADER */}
       <TopNavBar
         title="Notifications"
         subtitle={unreadCount > 0 ? `${unreadCount} unread alerts` : 'All caught up'}
@@ -245,77 +123,14 @@ export function NotificationsPage({
               style={({ pressed }) => [styles.markAllBtn, pressed && styles.btnPressed]}
               onPress={handleMarkAllRead}
             >
-              <Ionicons name="checkmark-done" size={15} color="#059669" />
+              <Ionicons name="checkmark-done" size={14} color="#059669" />
               <Text style={styles.markAllText}>Mark Read</Text>
             </Pressable>
           ) : undefined
         }
       />
 
-      {/* 2. CATEGORY PILL TABS */}
-      <View style={styles.filterBarWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterBar}
-        >
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'all' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('all')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'all' && styles.filterPillTextActive]}>
-              All ({rawNotifications.length})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'unread' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('unread')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'unread' && styles.filterPillTextActive]}>
-              Unread {unreadCount > 0 ? `(${unreadCount})` : ''}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'khata' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('khata')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'khata' && styles.filterPillTextActive]}>
-              Khata Due {khataDueCount > 0 ? `(${khataDueCount})` : ''}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'payment' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('payment')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'payment' && styles.filterPillTextActive]}>
-              💰 Payments
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'haziri' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('haziri')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'haziri' && styles.filterPillTextActive]}>
-              📋 Haziri
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.filterPill, selectedFilter === 'system' && styles.filterPillActive]}
-            onPress={() => setSelectedFilter('system')}
-          >
-            <Text style={[styles.filterPillText, selectedFilter === 'system' && styles.filterPillTextActive]}>
-              🔔 System
-            </Text>
-          </Pressable>
-        </ScrollView>
-      </View>
-
-      {/* 3. NOTIFICATION LIST CONTENT */}
+      {/* 2. NOTIFICATION LIST CONTENT */}
       <ScrollView
         style={styles.listScroll}
         contentContainerStyle={styles.listContent}
@@ -326,21 +141,19 @@ export function NotificationsPage({
           ) : undefined
         }
       >
-        {filteredList.length === 0 ? (
+        {rawNotifications.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconCircle}>
-              <Ionicons name="notifications-off-outline" size={38} color="#94A3B8" />
+              <Ionicons name="notifications-off-outline" size={36} color="#94A3B8" />
             </View>
             <Text style={styles.emptyTitle}>No Notifications</Text>
             <Text style={styles.emptySub}>
-              {selectedFilter === 'unread'
-                ? 'You have read all your notifications! Great job.'
-                : 'No alerts found for this category. New updates will appear here.'}
+              You have no active alerts right now. New updates will appear here.
             </Text>
           </View>
         ) : (
-          filteredList.map((item) => {
-            const isRead = item.read || readIds.has(item.id);
+          rawNotifications.map((item) => {
+            const isRead = item.read || activeReadIds.has(item.id);
             const iconConfig = getIconForType(item.type);
 
             return (
@@ -353,55 +166,53 @@ export function NotificationsPage({
                   pressed && styles.cardPressed,
                 ]}
               >
-                {/* Type Icon */}
+                {/* 1. Left Type Icon */}
                 <View style={[styles.iconBox, { backgroundColor: iconConfig.bg }]}>
-                  <Ionicons name={iconConfig.name} size={18} color={iconConfig.color} />
+                  <Ionicons name={iconConfig.name} size={17} color={iconConfig.color} />
                 </View>
 
-                {/* Content Info */}
+                {/* 2. Middle Text Info */}
                 <View style={styles.cardContent}>
-                  <View style={styles.cardTopRow}>
-                    <Text style={[styles.itemTitle, !isRead && styles.unreadTitleText]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <View style={styles.timeAndDotRow}>
-                      <Text style={styles.timeText}>{item.timeAgo}</Text>
-                      {!isRead && <View style={styles.unreadBlueDot} />}
-                    </View>
-                  </View>
+                  <Text
+                    style={[styles.itemTitle, !isRead && styles.unreadTitleText]}
+                    numberOfLines={1}
+                  >
+                    {item.title}
+                  </Text>
+                  <Text style={styles.itemMessage} numberOfLines={1}>
+                    {item.message}
+                  </Text>
+                </View>
 
-                  <View style={styles.cardBottomRow}>
-                    <Text style={styles.itemMessage} numberOfLines={2}>
-                      {item.message}
-                    </Text>
-                    {item.actionTab && !item.khataSummary && (
-                      <Ionicons name="chevron-forward" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
-                    )}
+                {/* 3. Right Action & Timestamp Column */}
+                <View style={styles.cardRightCol}>
+                  <View style={styles.timeAndDotRow}>
+                    <Text style={styles.timeText}>{item.timeAgo}</Text>
+                    {!isRead && <View style={styles.unreadBlueDot} />}
                   </View>
 
                   {item.khataSummary ? (
-                    <View style={styles.khataActionRow}>
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          const ks = item.khataSummary!;
-                          openWhatsAppReminder(
-                            ks.party,
-                            ks.balance,
-                            senderName,
-                            ks.lastEntryDate,
-                            (m) => showToast(m, 'w')
-                          );
-                        }}
-                        style={({ pressed }) => [
-                          styles.khataWhatsappBtn,
-                          pressed && { opacity: 0.8 },
-                        ]}
-                      >
-                        <Ionicons name="logo-whatsapp" size={14} color="#FFFFFF" />
-                        <Text style={styles.khataWhatsappBtnText}>Send WhatsApp</Text>
-                      </Pressable>
-                    </View>
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        setRemindItem(item);
+                      }}
+                      style={({ pressed }) => [
+                        styles.compactRemindBtn,
+                        pressed && { opacity: 0.75, transform: [{ scale: 0.95 }] },
+                      ]}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Ionicons name="notifications-outline" size={12} color="#1E40AF" />
+                      <Text style={styles.compactRemindBtnText}>Remind</Text>
+                    </Pressable>
+                  ) : item.actionTab ? (
+                    <Ionicons
+                      name="chevron-forward"
+                      size={15}
+                      color="#94A3B8"
+                      style={{ marginTop: 4 }}
+                    />
                   ) : null}
                 </View>
               </Pressable>
@@ -409,6 +220,117 @@ export function NotificationsPage({
           })
         )}
       </ScrollView>
+
+      {/* 3. REMIND CHANNEL PICKER MODAL (WhatsApp or SMS) */}
+      {remindItem && remindItem.khataSummary ? (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRemindItem(null)}
+        >
+          <Pressable
+            style={styles.remindModalBackdrop}
+            onPress={() => setRemindItem(null)}
+          >
+            <Pressable
+              style={styles.remindModalCard}
+              onPress={(e) => {
+                e.stopPropagation?.();
+              }}
+            >
+              {/* Modal Header */}
+              <View style={styles.remindModalHeader}>
+                <View style={{ flex: 1, paddingRight: 6 }}>
+                  <Text style={styles.remindModalTitle}>Send Reminder</Text>
+                  <Text style={styles.remindModalSubtitle} numberOfLines={1}>
+                    {remindItem.khataSummary.party.name} • {money(remindItem.khataSummary.balance)}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.remindModalCloseBtn}
+                  onPress={() => setRemindItem(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={18} color="#64748B" />
+                </Pressable>
+              </View>
+
+              <Text style={styles.remindModalInstruction}>
+                Select channel to send payment reminder:
+              </Text>
+
+              {/* 1. WhatsApp Option */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.remindOptionBtn,
+                  pressed && styles.remindOptionPressed,
+                ]}
+                onPress={() => {
+                  const ks = remindItem.khataSummary!;
+                  setRemindItem(null);
+                  openWhatsAppReminder(
+                    ks.party,
+                    ks.balance,
+                    senderName,
+                    ks.lastEntryDate,
+                    (m) => showToast(m, 'w')
+                  );
+                }}
+              >
+                <View style={[styles.remindOptionIcon, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
+                </View>
+                <View style={styles.remindOptionTextWrap}>
+                  <Text style={styles.remindOptionTitle}>WhatsApp</Text>
+                  <Text style={styles.remindOptionSub}>
+                    Send bill reminder on WhatsApp
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color="#94A3B8" />
+              </Pressable>
+
+              {/* 2. Text SMS Option */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.remindOptionBtn,
+                  pressed && styles.remindOptionPressed,
+                ]}
+                onPress={() => {
+                  const ks = remindItem.khataSummary!;
+                  setRemindItem(null);
+                  openSmsReminder(
+                    ks.party,
+                    ks.balance,
+                    senderName,
+                    ks.lastEntryDate,
+                    (m) => showToast(m, 'w')
+                  );
+                }}
+              >
+                <View style={[styles.remindOptionIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={17} color="#2563EB" />
+                </View>
+                <View style={styles.remindOptionTextWrap}>
+                  <Text style={styles.remindOptionTitle}>Text SMS</Text>
+                  <Text style={styles.remindOptionSub}>
+                    Send SMS message to contact
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color="#94A3B8" />
+              </Pressable>
+
+              {/* Close Button */}
+              <Pressable
+                style={styles.remindModalCancelBtn}
+                onPress={() => setRemindItem(null)}
+              >
+                <Text style={styles.remindModalCancelText}>Cancel</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -419,7 +341,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
 
-  /* 1. Header Action & Filter Pills */
+  /* 1. Header Action */
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -430,101 +352,94 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     gap: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   markAllText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#059669',
   },
-  filterBarWrapper: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingVertical: 8,
-  },
-  filterBar: {
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  filterPillActive: {
-    backgroundColor: '#1E293B',
-    borderColor: '#1E293B',
-  },
-  filterPillText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-  },
 
-  /* 3. List Content */
+  /* 2. Compact Notification Cards List */
   listScroll: {
     flex: 1,
   },
   listContent: {
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 30,
+    paddingTop: 12,
+    paddingBottom: 110,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
   },
   notificationCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingVertical: 9,
-    paddingHorizontal: 11,
-    marginBottom: 7,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     ...Platform.select({
-      web: { boxShadow: '0 1px 4px rgba(0, 0, 0, 0.03)' },
-      default: { elevation: 1 },
+      web: {
+        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+        cursor: 'pointer',
+      } as any,
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
+        elevation: 1,
+      },
     }),
   },
   unreadCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#BFDBFE',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderLeftWidth: 3.5,
     borderLeftColor: '#2563EB',
+  },
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
   },
   iconBox: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    flexShrink: 0,
   },
   cardContent: {
     flex: 1,
     justifyContent: 'center',
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+    paddingRight: 6,
   },
   itemTitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#334155',
-    flex: 1,
-    marginRight: 6,
+    color: '#0F172A',
+    marginBottom: 2,
   },
   unreadTitleText: {
-    color: '#0F172A',
     fontWeight: '800',
+    color: '#0F172A',
+  },
+  itemMessage: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  cardRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    flexShrink: 0,
+    minHeight: 34,
   },
   timeAndDotRow: {
     flexDirection: 'row',
@@ -532,9 +447,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   timeText: {
-    fontSize: 10.5,
-    color: '#94A3B8',
+    fontSize: 10,
     fontWeight: '600',
+    color: '#94A3B8',
   },
   unreadBlueDot: {
     width: 6,
@@ -542,71 +457,153 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#2563EB',
   },
-  cardBottomRow: {
+  compactRemindBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 3.5,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    marginTop: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
-  itemMessage: {
-    fontSize: 11.5,
-    color: '#64748B',
-    lineHeight: 15,
-    flex: 1,
-  },
-  khataActionRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-  },
-  khataWhatsappBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#16A34A',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9,
-  },
-  khataWhatsappBtnText: {
-    fontSize: 12,
+  compactRemindBtnText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1E40AF',
+    letterSpacing: 0.1,
   },
 
-  /* Empty State */
+  /* 3. Empty State */
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#E2E8F0',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: '#1E293B',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   emptySub: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    lineHeight: 19,
+    lineHeight: 17,
+  },
+  btnPressed: {
+    opacity: 0.7,
   },
 
-  btnPressed: {
-    opacity: 0.75,
-    transform: [{ scale: 0.96 }],
+  /* 4. Compact Remind Channel Picker Modal Styles */
+  remindModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
   },
-  cardPressed: {
-    opacity: 0.85,
+  remindModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 30px rgba(0, 0, 0, 0.16)' } as any,
+      default: { elevation: 8 },
+    }),
+  },
+  remindModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  remindModalTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  remindModalSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  remindModalCloseBtn: {
+    padding: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  remindModalInstruction: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  remindOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  remindOptionPressed: {
+    backgroundColor: '#F1F5F9',
     transform: [{ scale: 0.99 }],
+  },
+  remindOptionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  remindOptionTextWrap: {
+    flex: 1,
+  },
+  remindOptionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  remindOptionSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  remindModalCancelBtn: {
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  remindModalCancelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
   },
 });

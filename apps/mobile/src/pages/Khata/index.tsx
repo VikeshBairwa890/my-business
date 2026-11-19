@@ -8,6 +8,7 @@ import {
   RefreshControl,
   StyleSheet,
   Platform,
+  Image,
 } from 'react-native';
 import { money } from '../../../../../shared/finance';
 import { TopNavBar, formatNameInitials } from '../../components/common/TopNavBar';
@@ -71,6 +72,7 @@ export function KhataPage({
   const entries = data.khataEntries ?? [];
   const workers = data.workers ?? [];
   const senderName = data.organization?.name || data.user?.name || 'ThekaBook';
+  const senderPhone = data.organization?.phone || data.user?.phone || '';
 
   const [mode, setMode] = useState<SubMode>(
     selectedPartyId ? { view: 'detail', partyId: selectedPartyId } : { view: 'list' }
@@ -185,6 +187,7 @@ export function KhataPage({
           worker_id?: string | null;
           reminder_date?: string | null;
           notes: string;
+          photo?: string;
         }) => {
           onKhataCommand('khata.partyUpdate', vals, party.id);
           openPartyDetail(party.id);
@@ -254,6 +257,7 @@ export function KhataPage({
         summary={summary}
         allEntries={entries}
         senderName={senderName}
+        senderPhone={senderPhone}
         onBack={backToList}
         onEditParty={() => setMode({ view: 'editParty', partyId: summary.party.id })}
         onAddEntry={(isDebit) =>
@@ -297,16 +301,9 @@ export function KhataPage({
           ) : undefined
         }
       >
-        {/* 1. FIXED-SIZE DUAL SUMMARY CARDS (You will give | You will get) */}
+        {/* 1. FIXED-SIZE DUAL SUMMARY CARDS (You will give | You will get) - Non-clickable View Only */}
         <View style={styles.summaryRow}>
-          <Pressable
-            onPress={() => setFilter(filter === 'TO_GIVE' ? 'ALL' : 'TO_GIVE')}
-            style={({ pressed }) => [
-              styles.statCard,
-              filter === 'TO_GIVE' && styles.statCardGiveActive,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
+          <View style={styles.statCard}>
             <View style={styles.statLabelRow}>
               <View style={[styles.statIconDot, { backgroundColor: '#ECFDF5' }]}>
                 <AppIcon name="arrow-up" size={12} color="#059669" />
@@ -322,16 +319,9 @@ export function KhataPage({
             >
               {money(totals.totalToGive)}
             </Text>
-          </Pressable>
+          </View>
 
-          <Pressable
-            onPress={() => setFilter(filter === 'TO_GET' ? 'ALL' : 'TO_GET')}
-            style={({ pressed }) => [
-              styles.statCard,
-              filter === 'TO_GET' && styles.statCardGetActive,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
+          <View style={styles.statCard}>
             <View style={styles.statLabelRow}>
               <View style={[styles.statIconDot, { backgroundColor: '#FEF2F2' }]}>
                 <AppIcon name="arrow-down" size={12} color="#DC2626" />
@@ -347,7 +337,7 @@ export function KhataPage({
             >
               {money(totals.totalToGet)}
             </Text>
-          </Pressable>
+          </View>
         </View>
 
         {/* 2. SEARCH BAR */}
@@ -421,9 +411,13 @@ export function KhataPage({
                 >
                   {/* Calm Uniform Avatar */}
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {formatNameInitials(s.party.name, 'K')}
-                    </Text>
+                    {s.party.photo ? (
+                      <Image source={{ uri: s.party.photo }} style={styles.avatarImg} />
+                    ) : (
+                      <Text style={styles.avatarText}>
+                        {formatNameInitials(s.party.name, 'K')}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Middle Info */}
@@ -497,9 +491,13 @@ export function KhataPage({
             {/* Compact Person & Pending Amount Summary Strip */}
             <View style={styles.popupPersonBox}>
               <View style={styles.popupAvatar}>
-                <Text style={styles.popupAvatarText}>
-                  {formatNameInitials(remindTarget.party.name, 'K')}
-                </Text>
+                {remindTarget.party.photo ? (
+                  <Image source={{ uri: remindTarget.party.photo }} style={styles.popupAvatarImg} />
+                ) : (
+                  <Text style={styles.popupAvatarText}>
+                    {formatNameInitials(remindTarget.party.name, 'K')}
+                  </Text>
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.popupPersonName} numberOfLines={1}>
@@ -607,14 +605,6 @@ const styles = StyleSheet.create({
       web: { boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)' } as any,
       default: { elevation: 1 },
     }),
-  },
-  statCardGiveActive: {
-    borderColor: '#6EE7B7',
-    backgroundColor: '#FAFFFD',
-  },
-  statCardGetActive: {
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FFFBFB',
   },
   statLabelRow: {
     flexDirection: 'row',
@@ -757,6 +747,13 @@ const styles = StyleSheet.create({
     borderColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    resizeMode: 'cover',
   },
   avatarText: {
     fontSize: 14,
@@ -883,6 +880,13 @@ const styles = StyleSheet.create({
     borderColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  popupAvatarImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    resizeMode: 'cover',
   },
   popupAvatarText: {
     fontSize: 14,

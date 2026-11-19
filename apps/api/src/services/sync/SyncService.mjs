@@ -128,11 +128,11 @@ export class SyncService {
     const [org, user, sites, workers, attendances, entries, audits, khataParties, khataEntries] = await Promise.all([
       prisma.organization.findUnique({
         where: { id: orgId },
-        select: { id: true, name: true, revision: true },
+        select: { id: true, name: true, phone: true, revision: true },
       }),
       prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, orgId: true, name: true, email: true, createdAt: true },
+        select: { id: true, orgId: true, name: true, phone: true, email: true, createdAt: true },
       }),
       prisma.site.findMany({ where: { orgId }, orderBy: { createdAt: 'desc' } }),
       prisma.worker.findMany({ where: { orgId }, orderBy: { name: 'asc' } }),

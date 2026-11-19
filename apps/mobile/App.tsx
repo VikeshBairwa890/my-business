@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,11 @@ import { HisabPage, VoidEntryPage } from './src/pages/Hisab';
 import { ReportsPage } from './src/pages/Reports';
 import { ProfilePage } from './src/pages/Profile';
 import { NotificationsPage } from './src/pages/Notifications';
+import {
+  getReadNotificationIds,
+  saveReadNotificationIds,
+  getUnreadNotificationCount,
+} from './src/storage/notificationStorage';
 import { SettingsPage } from './src/pages/Settings';
 import { BanksPage } from './src/pages/Banks';
 import { PaymentsPage } from './src/pages/Payments';
@@ -154,6 +159,18 @@ function MainApp() {
   const [error, setError] = useState('');
   const [showFabModal, setShowFabModal] = useState(false);
   const [showServerConfig, setShowServerConfig] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
+
+  // Load persistent read notification IDs on mount
+  useEffect(() => {
+    getReadNotificationIds().then((ids) => {
+      setReadNotificationIds(ids);
+    });
+  }, []);
+
+  const unreadNotificationCount = useMemo(() => {
+    return getUnreadNotificationCount(data, readNotificationIds);
+  }, [data, readNotificationIds]);
   const pendingRef = useRef<{ signature: string; key: string } | null>(null);
   const inFlightCommandsRef = useRef(0);
   const mutationSeqRef = useRef(0);
@@ -906,15 +923,25 @@ function MainApp() {
     }
   }, []);
 
-  function handleNavigate(targetTab: string) {
+  function handleNavigate(targetTab: string, targetId?: string) {
     let actualTab = targetTab;
     if (targetTab === 'workers' || targetTab === 'labour') {
       actualTab = 'team';
     } else if (targetTab === 'hisab') {
       actualTab = 'ledger';
     }
-    if (actualTab === 'khata') setSelectedKhataPartyId(null);
-    navigate(actualTab, actualTab === 'home' ? '/' : `/${actualTab}`, null, false, null);
+    if (actualTab === 'khata') {
+      setSelectedKhataPartyId(targetId || null);
+    }
+    const siteId = actualTab === 'sites' ? (targetId || null) : null;
+    const workerId = actualTab === 'team' ? (targetId || null) : null;
+    navigate(
+      actualTab,
+      actualTab === 'home' ? '/' : actualTab === 'khata' && targetId ? `/khata/${targetId}` : `/${actualTab}`,
+      siteId,
+      false,
+      workerId
+    );
   }
 
   async function handleCreateNewSite(values: Record<string, string>) {
@@ -1236,6 +1263,7 @@ function MainApp() {
           orgId: prev.organization?.id,
           name: String(payload.name || '').trim(),
           phone: String(payload.phone || '').trim(),
+          photo: String(payload.photo || payload.avatar || '').trim(),
           category: String(payload.category || 'FRIEND').toUpperCase(),
           worker_id: payload.worker_id || null,
           workerId: payload.worker_id || null,
@@ -1473,6 +1501,7 @@ function MainApp() {
               onShareReport={() => handleShareReport(true)}
               onOpenProfile={() => handleNavigate('profile')}
               onOpenNotifications={() => navigate('notifications', '/notifications', null, false)}
+              unreadNotificationCount={unreadNotificationCount}
               onLogout={handleLogout}
               onShowToast={(msg, type) => showToast(msg, type as any)}
             />
@@ -1697,6 +1726,8 @@ function MainApp() {
                   onNavigateTab={handleNavigate}
                   onRefresh={() => refresh()}
                   refreshing={refreshing}
+                  readIds={readNotificationIds}
+                  onUpdateReadIds={setReadNotificationIds}
                 />
               )}
 

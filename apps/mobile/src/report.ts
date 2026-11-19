@@ -3,6 +3,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { reportText } from '../../../shared/finance';
 import { Snapshot, Row } from './types';
+import { getBusinessProfile, BusinessProfileData } from './storage/profileStorage';
 import {
   getDocFromIndexedDB,
   fetchDocFromServer,
@@ -247,7 +248,13 @@ export async function printWorkerMonthlySlipPdf(
   const totalUnits = pCount + hdCount * 0.5;
   const dailyRate = Number(worker.daily_rate || 0);
   const totalOtHours = otMinsTotal / 60;
-  const orgName = data.organization.name || data.user.name || 'ThekaBook Contractor';
+  // Dynamic Profile Integration: reflects updated business profile (firm name, address, phone, GST)
+  const profile = await getBusinessProfile();
+  const orgName = profile?.firmName?.trim() || data.organization.name || data.user.name || 'ThekaBook Contractor';
+  const orgAddress = [profile?.address?.trim(), profile?.city?.trim(), profile?.state?.trim()].filter(Boolean).join(', ');
+  const orgPhone = profile?.phone?.trim() || '';
+  const orgGstin = profile?.gstin?.trim() || '';
+  const orgLogo = profile?.logo?.trim() || '';
 
   const rowsHtml = dayRows.map((r) => {
     let statusBadge = '<span class="badge-dash">-</span>';
@@ -318,6 +325,7 @@ export async function printWorkerMonthlySlipPdf(
       border-bottom: 1.5px solid #E2E8F0;
       margin-bottom: 10px;
     }
+    .zoho-company-meta { font-size: 8px; color: #64748B; margin-top: 1px; line-height: 1.3; }
     .zoho-company-name {
       font-size: 17px;
       font-weight: 800;
@@ -532,6 +540,7 @@ export async function printWorkerMonthlySlipPdf(
   <div class="zoho-header">
     <div>
       <div class="zoho-company-name">${escape(orgName)}</div>
+      ${orgAddress ? `<div class="zoho-company-meta">${escape(orgAddress)}${orgPhone ? ` • Ph: ${escape(orgPhone)}` : ''}${orgGstin ? ` • GSTIN: ${escape(orgGstin)}` : ''}</div>` : ''}
       <div class="zoho-doc-title">${escape(L.title)}</div>
     </div>
     <div class="zoho-header-meta">
@@ -793,7 +802,12 @@ export async function printMusterRollPdf(
     </th>
   `).join('');
 
-  const orgName = data.organization.name || data.user.name || 'ThekaBook Contractor';
+  // Dynamic Profile Integration: reflects updated business profile (firm name, address, phone, GST)
+  const profile = await getBusinessProfile();
+  const orgName = profile?.firmName?.trim() || data.organization.name || data.user.name || 'ThekaBook Contractor';
+  const orgAddress = [profile?.address?.trim(), profile?.city?.trim(), profile?.state?.trim()].filter(Boolean).join(', ');
+  const orgPhone = profile?.phone?.trim() || '';
+  const orgGstin = profile?.gstin?.trim() || '';
 
   const html = `<!DOCTYPE html>
 <html>
@@ -1073,6 +1087,7 @@ export async function printMusterRollPdf(
   <div class="header-box">
     <div>
       <div class="firm-name">${escape(orgName)}</div>
+      ${orgAddress ? `<div style="font-size: 8px; color: #64748B; margin-top: 1px;">${escape(orgAddress)}${orgPhone ? ` • Ph: ${escape(orgPhone)}` : ''}${orgGstin ? ` • GSTIN: ${escape(orgGstin)}` : ''}</div>` : ''}
       <div class="register-title">${escape(L.title)}</div>
       <div style="font-size: 8.5px; color: #475569; margin-top: 1px;">
         ${escape(L.site)}: <b>${escape(siteFilterName)}</b> | ${escape(L.month)}: <b>${escape(monthTitle)}</b>
@@ -1484,11 +1499,12 @@ function buildWorkerIdCardHtml(
   selectedSiteId?: string,
   validUntil?: string,
   lang: string = 'en',
-  isA4: boolean = false
+  isA4: boolean = false,
+  profile?: BusinessProfileData | null
 ): string {
   const isHi = lang === 'hi';
-  const orgName = data.organization?.name || 'ThekaBook Contractor Services';
-  const contractorName = data.user?.name || 'Site Incharge';
+  const orgName = profile?.firmName?.trim() || data.organization?.name || 'ThekaBook Contractor Services';
+  const contractorName = profile?.contractorName?.trim() || data.user?.name || 'Site Incharge';
   const workerCode = `TK-W-${String(worker.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
 
   const site = selectedSiteId && selectedSiteId !== 'ALL'
@@ -1823,7 +1839,8 @@ export async function printWorkerIdCardAndGatePassPdf(
   lang: string = 'en'
 ) {
   const isHi = lang === 'hi';
-  const html = buildWorkerIdCardHtml(data, worker, selectedSiteId, validUntil, lang, true);
+  const profile = await getBusinessProfile();
+  const html = buildWorkerIdCardHtml(data, worker, selectedSiteId, validUntil, lang, true, profile);
   if (Platform.OS === 'web') {
     if (typeof document !== 'undefined') {
       try {
@@ -1870,7 +1887,8 @@ export async function shareWorkerIdCard(
   lang: string = 'en'
 ) {
   const isHi = lang === 'hi';
-  const orgName = data.organization?.name || 'ThekaBook Contractor Services';
+  const profile = await getBusinessProfile();
+  const orgName = profile?.firmName?.trim() || data.organization?.name || 'ThekaBook Contractor Services';
   const workerCode = `TK-W-${String(worker.id || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   const site = selectedSiteId && selectedSiteId !== 'ALL'
     ? data.sites.find((s) => s.id === selectedSiteId)

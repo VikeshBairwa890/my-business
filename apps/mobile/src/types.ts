@@ -1,7 +1,7 @@
 export type Row = { id: string;[key: string]: any };
 export type Snapshot = {
-  organization: { id?: string; name: string; revision?: number };
-  user: { name: string; avatar?: string; photo?: string;[key: string]: any };
+  organization: { id?: string; name: string; phone?: string; revision?: number };
+  user: { name: string; phone?: string; avatar?: string; photo?: string;[key: string]: any };
   sites: Row[];
   workers: Row[];
   attendance: Row[];

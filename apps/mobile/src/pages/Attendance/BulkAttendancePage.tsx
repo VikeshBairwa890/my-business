@@ -102,9 +102,10 @@ export function BulkAttendancePage({
   const [workerStatus, setWorkerStatus] = useState<Record<string, AttendanceStatus>>({});
   const [initialStatusSnapshot, setInitialStatusSnapshot] = useState<Record<string, AttendanceStatus>>({});
 
-  // Reset local saved statuses when site or date changes
+  // Reset local saved statuses and selection when site or date changes
   useEffect(() => {
     setLocallySavedStatus({});
+    setSelectedWorkerIds(new Set());
   }, [selectedSiteId, selectedDate]);
 
   // Map of truly marked/saved worker statuses for this site & date (unmarked workers are NOT in this map)
@@ -135,17 +136,14 @@ export function BulkAttendancePage({
     setActiveFilter('ALL');
   }, [selectedSiteId, selectedDate]);
 
-  // Set of selected worker IDs (for the checkbox on the left)
-  const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(() => {
-    return new Set(activeWorkers.map((w) => w.id));
-  });
+  // Set of selected worker IDs (starts empty - selected only when user manually checks or taps Select All)
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<Set<string>>(() => new Set<string>());
 
   // Load existing records whenever selectedSiteId, selectedDate, or server attendance changes
   useEffect(() => {
     const statusMap: Record<string, AttendanceStatus> = {};
     const otMap: Record<string, number> = {};
     const notesMap: Record<string, string> = {};
-    const recordedIds = new Set<string>();
 
     activeWorkers.forEach((w) => {
       const record = (data.attendance || []).find(
@@ -156,7 +154,6 @@ export function BulkAttendancePage({
       );
 
       if (record) {
-        recordedIds.add(w.id);
         if (Number(record.units) === 1) {
           statusMap[w.id] = 'PRESENT';
         } else if (Number(record.units) === 0.5) {
@@ -177,14 +174,6 @@ export function BulkAttendancePage({
     setInitialStatusSnapshot({ ...statusMap });
     setOvertimeMinutes(otMap);
     setWorkerNotes(notesMap);
-
-    // If there are pending workers, select only pending workers by default
-    const unrecordedWorkers = activeWorkers.filter((w) => !recordedIds.has(w.id));
-    if (unrecordedWorkers.length > 0) {
-      setSelectedWorkerIds(new Set(unrecordedWorkers.map((w) => w.id)));
-    } else {
-      setSelectedWorkerIds(new Set(activeWorkers.map((w) => w.id)));
-    }
   }, [selectedSiteId, selectedDate, data.attendance, activeWorkers]);
 
   // Count metrics for the filter tabs (ONLY truly marked/saved workers count in Present/Absent/Half Day)
@@ -374,6 +363,7 @@ export function BulkAttendancePage({
       });
 
       setInitialStatusSnapshot({ ...workerStatus });
+      setSelectedWorkerIds(new Set());
 
       if (savedRecords.length > 0 && onBulkAttendanceSaved) {
         onBulkAttendanceSaved(savedRecords);
@@ -556,7 +546,9 @@ export function BulkAttendancePage({
                 )}
               </View>
               <Text style={styles.selectAllText}>
-                Select All ({displayedWorkers.length})
+                {selectedDisplayedWorkers.length > 0 && !isAllDisplayedSelected
+                  ? `Select All (${selectedDisplayedWorkers.length}/${displayedWorkers.length} selected)`
+                  : `Select All (${displayedWorkers.length})`}
               </Text>
             </Pressable>
           </View>
@@ -583,7 +575,7 @@ export function BulkAttendancePage({
               const isAlreadyMarked = markedWorkerIdSet.has(worker.id);
 
               return (
-                <View key={worker.id} style={[styles.workerRow, !isSelected && styles.workerRowUnselected]}>
+                <View key={worker.id} style={styles.workerRow}>
                   {/* Left Checkbox */}
                   <Pressable
                     style={styles.rowCheckboxArea}
@@ -705,7 +697,11 @@ export function BulkAttendancePage({
               {isSaving ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.primaryCtaText}>Save Attendance</Text>
+                <Text style={styles.primaryCtaText}>
+                  {selectedDisplayedWorkers.length > 0
+                    ? `Save Attendance (${selectedDisplayedWorkers.length})`
+                    : 'Save Attendance'}
+                </Text>
               )}
             </Pressable>
           </View>
@@ -903,9 +899,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-  },
-  workerRowUnselected: {
-    opacity: 0.52,
   },
   rowCheckboxArea: {
     paddingRight: 6,

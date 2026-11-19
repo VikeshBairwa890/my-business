@@ -25,6 +25,7 @@ import {
   uploadDocToServer,
   fetchDocFromServer,
   triggerBrowserDownload,
+  viewPdfDocument,
 } from '../../storage/docStorage';
 import { Row } from '../../types';
 import { today } from '../../forms';
@@ -51,7 +52,7 @@ interface KhataEntryFormPageProps {
 
 const QUICK_NOTES_GAVE = ['Loan given', 'Advance paid', 'Expense paid', 'Personal help'];
 const QUICK_NOTES_GOT = ['Payment received', 'Partial repayment', 'Full settlement', 'Cash received'];
-const MAX_PDF_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 export function KhataEntryFormPage({
   party,
@@ -69,6 +70,7 @@ export function KhataEntryFormPage({
 
   const [date, setDate] = useState(ymdToDmy(entry ? getEntryDateStr(entry) : today()));
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const isTodayDate = (dmyToYmd(date) || '') === today();
   const [amountText, setAmountText] = useState(
     entry?.amount ? String(Number(entry.amount) / 100) : ''
   );
@@ -130,10 +132,11 @@ export function KhataEntryFormPage({
       const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
       const img = new window.Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
+        let finalUrl = src;
         const maxDim = 1200;
+        let { width, height } = img;
         if (width > maxDim || height > maxDim) {
+          const canvas = document.createElement('canvas');
           if (width > height) {
             height = Math.round((height * maxDim) / width);
             width = maxDim;
@@ -141,15 +144,17 @@ export function KhataEntryFormPage({
             width = Math.round((width * maxDim) / height);
             height = maxDim;
           }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            finalUrl = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+          }
         }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        const outMime = isPng ? 'image/png' : 'image/jpeg';
-        const finalUrl = ctx ? canvas.toDataURL(outMime, 0.82) : src;
         setProofDataUrl(finalUrl);
         setProofName(file.name || 'proof_photo.jpg');
-        setProofMime(outMime);
+        setProofMime(isPng ? 'image/png' : 'image/jpeg');
         setProofChanged(true);
         setPickingProof(false);
       };
@@ -173,10 +178,16 @@ export function KhataEntryFormPage({
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
+      input.accept = 'image/jpeg,image/png,image/webp,image/*';
       input.onchange = () => {
         const file = input.files?.[0];
-        if (file) processWebImageFile(file);
+        if (file) {
+          if (file.size > MAX_FILE_BYTES) {
+            showToast('Photo must be under 2 MB', 'e');
+            return;
+          }
+          processWebImageFile(file);
+        }
       };
       input.click();
       return;
@@ -219,8 +230,8 @@ export function KhataEntryFormPage({
       input.onchange = () => {
         const file = input.files?.[0];
         if (!file) return;
-        if (file.size > MAX_PDF_BYTES) {
-          showToast('PDF file must be under 10 MB', 'e');
+        if (file.size > MAX_FILE_BYTES) {
+          showToast('PDF file must be under 2 MB', 'e');
           return;
         }
         setPickingProof(true);
@@ -245,7 +256,7 @@ export function KhataEntryFormPage({
       return;
     }
 
-    showToast('Use Upload Photo on mobile or Upload PDF on web', 'w');
+    showToast('Take a Photo via Camera or choose from Gallery on mobile', 'w');
   };
 
   const handleRemoveProof = () => {
@@ -256,17 +267,33 @@ export function KhataEntryFormPage({
     setProofChanged(true);
   };
 
-  const handleViewProof = () => {
-    if (!proofDataUrl) {
-      showToast('Loading attachment...', 'w');
-      return;
-    }
-    if (isPdf) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        triggerBrowserDownload(proofDataUrl, proofName || 'payment_proof.pdf');
+  const handleViewProof = async () => {
+    let url = proofDataUrl;
+    if (!url && proofDocId) {
+      showToast('Loading proof attachment...', 'i');
+      if (proofDocId.startsWith('data:') || proofDocId.startsWith('http')) {
+        url = proofDocId;
+      } else {
+        const local = await getDocFromIndexedDB(proofDocId);
+        if (local?.dataUrl) {
+          url = local.dataUrl;
+        } else {
+          const remote = await fetchDocFromServer(proofDocId);
+          if (remote?.blobUrl) {
+            url = remote.blobUrl;
+          }
+        }
       }
+      if (url) {
+        setProofDataUrl(url);
+      }
+    }
+
+    if (!url) {
+      showToast('Please wait, attachment loading...', 'w');
       return;
     }
+
     setViewerOpen(true);
   };
 
@@ -341,7 +368,7 @@ export function KhataEntryFormPage({
   return (
     <View style={styles.pageRoot}>
       <TopNavBar
-        title={isEdit ? (isGave ? 'Edit You Gave' : 'Edit You Got') : isGave ? 'You Gave' : 'You Got'}
+        title={isEdit ? 'Edit Entry' : isGave ? 'You Gave' : 'You Got'}
         onBack={onBack}
       />
 
@@ -357,28 +384,33 @@ export function KhataEntryFormPage({
         >
           {/* Single Clean Unified Entry Form Card */}
           <View style={styles.card}>
-            {/* 1. Date (Manual Entry + Clickable Calendar Icon) */}
+            {/* 1. Date (Clickable Date Picker Box) */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>
                 Date <Text style={styles.req}>*</Text>
               </Text>
-              <View style={styles.inputWrap}>
-                <TextInput
-                  style={styles.input}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
-                />
-                <Pressable
-                  onPress={() => setCalendarOpen(true)}
-                  style={({ pressed }) => [styles.calendarIconBtn, pressed && { opacity: 0.7 }]}
-                  accessibilityLabel="Open Calendar"
-                  hitSlop={6}
-                >
+              <Pressable
+                onPress={() => setCalendarOpen(true)}
+                style={({ pressed }) => [
+                  styles.dateSelectBox,
+                  pressed && { opacity: 0.85, borderColor: Colors.primary },
+                ]}
+                accessibilityLabel="Select Entry Date"
+              >
+                <View style={styles.dateValueWrap}>
+                  <Text style={styles.dateValueText}>
+                    {date || 'Select Date'}
+                  </Text>
+                  {isTodayDate ? (
+                    <View style={styles.todayPill}>
+                      <Text style={styles.todayPillText}>Today</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.calendarIconBtn}>
                   <AppIcon name="calendar-outline" size={19} color={Colors.primary} />
-                </Pressable>
-              </View>
+                </View>
+              </Pressable>
             </View>
 
             {/* 2. Amount */}
@@ -476,7 +508,10 @@ export function KhataEntryFormPage({
 
             {/* 5. Proof Attachment (Photo or PDF) */}
             <View style={[styles.fieldGroup, { marginBottom: 0 }]}>
-              <Text style={styles.label}>Proof / Receipt (Optional)</Text>
+              <View style={styles.proofHeaderRow}>
+                <Text style={styles.label}>Proof / Receipt (Optional)</Text>
+                <Text style={styles.proofSizeHint}>(Max 2 MB)</Text>
+              </View>
 
               {pickingProof ? (
                 <View style={styles.proofLoadingBox}>
@@ -484,48 +519,78 @@ export function KhataEntryFormPage({
                   <Text style={styles.proofLoadingText}>Processing file...</Text>
                 </View>
               ) : hasProof ? (
-                <Pressable
-                  onPress={handleViewProof}
-                  style={({ pressed }) => [styles.proofPreviewCard, pressed && { opacity: 0.85 }]}
-                >
-                  {isPdf ? (
-                    <View style={styles.pdfThumbBox}>
-                      <AppIcon name="document-text" size={22} color="#DC2626" />
-                    </View>
-                  ) : proofDataUrl ? (
-                    <Image source={{ uri: proofDataUrl }} style={styles.photoThumb} />
-                  ) : (
-                    <View style={styles.photoPlaceholderBox}>
-                      <AppIcon name="image-outline" size={20} color={Colors.primary} />
-                    </View>
-                  )}
+                <View style={styles.proofAttachedCard}>
+                  {/* Left: Thumbnail / Document Preview (Static, not clickable) */}
+                  <View style={styles.proofThumbWrap}>
+                    {isPdf ? (
+                      <View style={styles.pdfBadgeBox}>
+                        <AppIcon name="document-text" size={22} color="#DC2626" />
+                        <Text style={styles.pdfBadgeText}>PDF</Text>
+                      </View>
+                    ) : proofDataUrl ? (
+                      <Image source={{ uri: proofDataUrl }} style={styles.proofImgThumb} />
+                    ) : (
+                      <View style={styles.photoPlaceholderBox}>
+                        <AppIcon name="image-outline" size={22} color={Colors.primary} />
+                      </View>
+                    )}
+                  </View>
 
-                  <View style={{ flex: 1 }}>
+                  {/* Middle: Name and status (Static, not clickable) */}
+                  <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.proofFileName} numberOfLines={1}>
                       {proofName || (isPdf ? 'payment_proof.pdf' : 'payment_proof.jpg')}
                     </Text>
-                    <Text style={styles.proofHint}>
-                      {isPdf ? 'PDF attached • Tap to download' : 'Photo attached • Tap to preview'}
-                    </Text>
+                    <View style={styles.proofMetaRow}>
+                      <View
+                        style={[
+                          styles.proofTypeTag,
+                          isPdf ? styles.pdfTypeTag : styles.imgTypeTag,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.proofTypeTagText,
+                            isPdf ? styles.pdfTypeTagText : styles.imgTypeTagText,
+                          ]}
+                        >
+                          {isPdf ? 'PDF' : 'IMAGE'}
+                        </Text>
+                      </View>
+                      <Text style={styles.proofAttachedLabel}>Attached</Text>
+                    </View>
                   </View>
 
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation?.();
-                      handleRemoveProof();
-                    }}
-                    style={styles.proofRemoveBtn}
-                    hitSlop={8}
-                    accessibilityLabel="Remove proof"
-                  >
-                    <AppIcon name="close" size={16} color="#64748B" />
-                  </Pressable>
-                </Pressable>
+                  {/* Right Actions: Explicit View & Remove Buttons ONLY */}
+                  <View style={styles.proofActionsRow}>
+                    <Pressable
+                      onPress={handleViewProof}
+                      style={({ pressed }) => [styles.proofViewBtn, pressed && { opacity: 0.75 }]}
+                      hitSlop={8}
+                      accessibilityLabel="View Proof Attachment"
+                    >
+                      <AppIcon name="eye-outline" size={16} color={Colors.primary} />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={handleRemoveProof}
+                      style={({ pressed }) => [
+                        styles.proofRemoveBtn,
+                        pressed && { opacity: 0.75 },
+                      ]}
+                      hitSlop={8}
+                      accessibilityLabel="Remove Proof Attachment"
+                    >
+                      <AppIcon name="trash-outline" size={16} color="#DC2626" />
+                    </Pressable>
+                  </View>
+                </View>
               ) : (
                 <View style={styles.proofButtonsRow}>
                   <Pressable
                     onPress={handlePickPhoto}
                     style={({ pressed }) => [styles.proofPickBtn, pressed && { opacity: 0.8 }]}
+                    accessibilityLabel="Upload Photo"
                   >
                     <View style={[styles.proofIconCircle, { backgroundColor: '#EFF6FF' }]}>
                       <AppIcon name="camera-outline" size={17} color={Colors.primary} />
@@ -536,6 +601,7 @@ export function KhataEntryFormPage({
                   <Pressable
                     onPress={handlePickPdf}
                     style={({ pressed }) => [styles.proofPickBtn, pressed && { opacity: 0.8 }]}
+                    accessibilityLabel="Upload PDF"
                   >
                     <View style={[styles.proofIconCircle, { backgroundColor: '#FEF2F2' }]}>
                       <AppIcon name="document-text-outline" size={17} color="#DC2626" />
@@ -590,7 +656,6 @@ export function KhataEntryFormPage({
             onPress={handleSubmit}
             style={({ pressed }) => [
               styles.footerSaveBtn,
-              { backgroundColor: themeColor },
               pressed && { opacity: 0.85 },
             ]}
           >
@@ -674,6 +739,34 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     minHeight: 46,
+  },
+  dateSelectBox: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  dateValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dateValueText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  todayPill: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  todayPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   input: {
     flex: 1,
@@ -782,20 +875,31 @@ const styles = StyleSheet.create({
   },
 
   /* Proof Upload (Photo & PDF) */
+  proofHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  proofSizeHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
   proofButtonsRow: {
     flexDirection: 'row',
     gap: 10,
   },
   proofPickBtn: {
     flex: 1,
-    height: 46,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#CBD5E1',
     borderStyle: 'dashed',
     borderRadius: 12,
     paddingHorizontal: 10,
@@ -808,12 +912,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   proofPickText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
   proofLoadingBox: {
-    height: 52,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -828,7 +932,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textMuted,
   },
-  proofPreviewCard: {
+  proofAttachedCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -838,23 +942,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  photoThumb: {
-    width: 44,
-    height: 44,
+  proofThumbWrap: {
+    width: 46,
+    height: 46,
     borderRadius: 10,
+    overflow: 'hidden',
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proofImgThumb: {
+    width: '100%',
+    height: '100%',
   },
   photoPlaceholderBox: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 10,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pdfThumbBox: {
-    width: 44,
-    height: 44,
+  pdfBadgeBox: {
+    width: 46,
+    height: 46,
     borderRadius: 10,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
@@ -862,24 +975,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pdfBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: -2,
+  },
   proofFileName: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.textPrimary,
   },
-  proofHint: {
+  proofMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  proofTypeTag: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  pdfTypeTag: {
+    backgroundColor: '#FEE2E2',
+  },
+  imgTypeTag: {
+    backgroundColor: '#DBEAFE',
+  },
+  proofTypeTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  pdfTypeTagText: {
+    color: '#DC2626',
+  },
+  imgTypeTagText: {
+    color: '#2563EB',
+  },
+  proofAttachedLabel: {
     fontSize: 11,
-    fontWeight: '500',
-    color: Colors.textMuted,
-    marginTop: 2,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  proofActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  proofViewBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   proofRemoveBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#FECACA',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -972,6 +1132,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 12,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -173,3 +173,41 @@ export function triggerBrowserDownload(url: string, filename: string): void {
     console.error('Failed to trigger download:', err);
   }
 }
+
+/**
+ * Open PDF in browser new tab for direct viewing, falling back to download if blocked.
+ */
+export function viewPdfDocument(url: string, filename = 'document.pdf'): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+  try {
+    if (url.startsWith('blob:')) {
+      window.open(url, '_blank');
+      return;
+    }
+    if (url.startsWith('data:')) {
+      // Modern browsers block top-level navigation to data: URLs. Convert to Blob URL.
+      const commaIdx = url.indexOf(',');
+      const meta = url.slice(0, commaIdx);
+      const base64 = url.slice(commaIdx + 1);
+      const mime = meta.split(':')[1]?.split(';')[0] || 'application/pdf';
+      const byteChars = atob(base64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      return;
+    }
+    if (url.startsWith('http')) {
+      window.open(url, '_blank');
+      return;
+    }
+    triggerBrowserDownload(url, filename);
+  } catch {
+    triggerBrowserDownload(url, filename);
+  }
+}
