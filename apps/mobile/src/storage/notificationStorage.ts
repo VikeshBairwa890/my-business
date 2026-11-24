@@ -65,6 +65,16 @@ export async function saveReadNotificationIds(ids: Set<string> | string[]): Prom
   } catch { }
 }
 
+function formatEntryTimeAgo(dateStr?: string, todayStr = today()): string {
+  if (!dateStr) return 'Recent';
+  const cleanDate = String(dateStr).slice(0, 10);
+  if (cleanDate === todayStr) return 'Today';
+  const diffDays = daysBetween(cleanDate, todayStr);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays > 1 && diffDays <= 7) return `${diffDays}d ago`;
+  return formatShortDate(cleanDate);
+}
+
 /**
  * Generate contextual notification items from snapshot data
  */
@@ -109,7 +119,7 @@ export function generateNotificationItems(
     .slice(-3)
     .reverse();
 
-  recentPayments.forEach((entry, idx) => {
+  recentPayments.forEach((entry) => {
     const site = data?.sites.find((s) => s.id === entry.site_id);
     const siteName = site?.name || 'Work Site';
     const id = `entry-${entry.id}`;
@@ -118,7 +128,7 @@ export function generateNotificationItems(
       type: 'payment',
       title: `Payment Received: ${money(entry.amount || 0)}`,
       message: `Client payment received for ${siteName}. Added to hisaab ledger.`,
-      timeAgo: idx === 0 ? 'Recent' : `${idx * 2}h ago`,
+      timeAgo: formatEntryTimeAgo(entry.date, todayStr),
       read: readIds.has(id),
       actionTab: 'ledger',
       targetId: entry.id,
@@ -132,7 +142,7 @@ export function generateNotificationItems(
     .slice(-2)
     .reverse();
 
-  recentWages.forEach((wEntry, idx) => {
+  recentWages.forEach((wEntry) => {
     const worker = data?.workers.find((w) => w.id === wEntry.worker_id);
     const workerName = worker?.name || 'Worker';
     const id = `wage-${wEntry.id}`;
@@ -141,7 +151,7 @@ export function generateNotificationItems(
       type: 'wage',
       title: `Wage Paid: ${money(wEntry.amount || 0)}`,
       message: `Payment disbursed to ${workerName}. Balance updated.`,
-      timeAgo: `${(idx + 1) * 3}h ago`,
+      timeAgo: formatEntryTimeAgo(wEntry.date, todayStr),
       read: readIds.has(id),
       actionTab: 'team',
       targetId: wEntry.worker_id,
@@ -151,7 +161,9 @@ export function generateNotificationItems(
 
   // 4. Daily Haziri / Attendance Reminder
   const workerCount = data?.workers?.length || 0;
-  const haziriDoneToday = (data?.attendance || []).some((a) => a.date === todayStr);
+  const haziriDoneToday = (data?.attendance || []).some(
+    (a) => String(a.date || '').slice(0, 10) === todayStr
+  );
   const haziriId = `haziri-daily-${todayStr}`;
   list.push({
     id: haziriId,

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Platform,
   Image,
+  BackHandler,
 } from 'react-native';
 import { money } from '../../../../../shared/finance';
 import { TopNavBar, formatNameInitials } from '../../components/common/TopNavBar';
@@ -42,6 +43,8 @@ type SubMode =
 export interface KhataPageProps {
   data: Snapshot;
   selectedPartyId?: string | null;
+  fromNotifications?: boolean;
+  onBackFromDetail?: () => void;
   onSelectParty?: (partyId: string | null) => void;
   onBack: () => void;
   refreshing?: boolean;
@@ -62,6 +65,8 @@ export interface KhataPageProps {
 export function KhataPage({
   data,
   selectedPartyId,
+  fromNotifications = false,
+  onBackFromDetail,
   onSelectParty,
   onBack,
   refreshing = false,
@@ -141,12 +146,69 @@ export function KhataPage({
   const openPartyDetail = (partyId: string) => {
     setMode({ view: 'detail', partyId });
     onSelectParty?.(partyId);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.history.pushState({ mode: 'detail', partyId }, '', `/khata/${partyId}`);
+    }
   };
 
   const backToList = () => {
+    if (fromNotifications && onBackFromDetail) {
+      onBackFromDetail();
+      return;
+    }
     setMode({ view: 'list' });
     onSelectParty?.(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/khata');
+    }
   };
+
+  // Handle mobile / Android back press within Khata sub-views
+  useEffect(() => {
+    if (mode.view === 'list') return;
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        const onPopState = () => {
+          if (mode.view === 'addParty') {
+            backToList();
+          } else if (
+            mode.view === 'editParty' ||
+            mode.view === 'addEntry' ||
+            mode.view === 'editEntry'
+          ) {
+            openPartyDetail(mode.partyId);
+          } else if (mode.view === 'detail') {
+            backToList();
+          }
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+      }
+      return;
+    }
+
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (mode.view === 'addParty') {
+        backToList();
+        return true;
+      }
+      if (
+        mode.view === 'editParty' ||
+        mode.view === 'addEntry' ||
+        mode.view === 'editEntry'
+      ) {
+        openPartyDetail(mode.partyId);
+        return true;
+      }
+      if (mode.view === 'detail') {
+        backToList();
+        return true;
+      }
+      return false;
+    });
+    return () => backSub.remove();
+  }, [mode]);
 
   // --- Sub-Page: Add Person ---
   if (mode.view === 'addParty') {

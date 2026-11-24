@@ -58,7 +58,28 @@ export function AttendanceModal({
   const [units, setUnits] = useState<'1' | '0.5' | '0'>(
     (spec.initial.units as any) || '1'
   );
+  const initialOtHours = useMemo(() => {
+    const mins = Number(spec.initial.overtime_minutes || 0);
+    return mins > 0 ? String(Math.round(mins / 60)) : '';
+  }, [spec.initial.overtime_minutes]);
+  const [otHours, setOtHours] = useState<string>(initialOtHours);
   const [notes, setNotes] = useState<string>(spec.initial.notes || '');
+
+  const handleOtHoursChange = (text: string) => {
+    // Only whole integer hours allowed: no dots (.), no decimals, only digits 0-9
+    const digitsOnly = text.replace(/[^0-9]/g, '');
+    if (!digitsOnly) {
+      setOtHours('');
+      return;
+    }
+    const val = parseInt(digitsOnly, 10);
+    if (val > 16) {
+      showToast('Maximum 16 hours overtime allowed', 'w');
+      setOtHours('16');
+      return;
+    }
+    setOtHours(String(val));
+  };
 
   // Modals & validation state
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -110,12 +131,15 @@ export function AttendanceModal({
       return;
     }
 
+    const parsedOtHours = parseInt(otHours, 10) || 0;
+    const parsedOtMinutes = parsedOtHours * 60;
+
     onSave({
       site_id: siteId,
       worker_id: workerId,
       date,
       units,
-      overtime_minutes: '0',
+      overtime_minutes: String(parsedOtMinutes),
       notes: notes.trim(),
     });
   };
@@ -307,6 +331,67 @@ export function AttendanceModal({
                   Absent
                 </Text>
               </Pressable>
+            </View>
+          </View>
+
+          {/* Overtime (Hours) Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <AppIcon name="time-outline" size={16} color="#D97706" />
+                <Text style={styles.cardTitle}>Overtime (Hours)</Text>
+              </View>
+              {parseInt(otHours, 10) > 0 ? (
+                <View style={styles.otActiveBadge}>
+                  <Text style={styles.otActiveBadgeText}>+{otHours}h OT</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.otInputRow}>
+              <TextInput
+                value={otHours}
+                onChangeText={handleOtHoursChange}
+                placeholder="0"
+                keyboardType="number-pad"
+                placeholderTextColor="#94A3B8"
+                style={styles.otInput}
+              />
+              <Text style={styles.otUnitText}>Hours</Text>
+            </View>
+
+            {/* Quick Presets: +1h, +2h, +3h, +4h, +5h */}
+            <View style={styles.otPresetsRow}>
+              {['1', '2', '3', '4', '5'].map((h) => {
+                const isActive = otHours === h;
+                return (
+                  <Pressable
+                    key={h}
+                    onPress={() => setOtHours((prev) => (prev === h ? '' : h))}
+                    style={[
+                      styles.otPresetChip,
+                      isActive && styles.otPresetChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.otPresetChipText,
+                        isActive && styles.otPresetChipTextActive,
+                      ]}
+                    >
+                      +{h}h
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              {parseInt(otHours, 10) > 0 ? (
+                <Pressable
+                  onPress={() => setOtHours('')}
+                  style={styles.otClearChip}
+                >
+                  <Text style={styles.otClearChipText}>Clear</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -787,21 +872,6 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 20 : 14,
     gap: 10,
   },
-  footerSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerSummaryLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  footerSummaryAmount: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#15803D',
-  },
   footerBtns: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -841,6 +911,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  otActiveBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  otActiveBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  otInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  otInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  otUnitText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  otPresetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  otPresetChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 7,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  otPresetChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  otPresetChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  otPresetChipTextActive: {
+    color: '#92400E',
+    fontWeight: '800',
+  },
+  otClearChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  otClearChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   hiddenPicker: {
     position: 'absolute',

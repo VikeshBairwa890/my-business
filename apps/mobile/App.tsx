@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -199,6 +199,13 @@ function MainApp() {
           background-color: transparent !important;
           color: #0F172A !important;
           color-scheme: light !important;
+          outline: none !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        input:focus, textarea:focus, select:focus {
+          outline: none !important;
+          box-shadow: none !important;
         }
         input::placeholder, textarea::placeholder {
           color: #94A3B8 !important;
@@ -633,6 +640,17 @@ function MainApp() {
 
   const tabHistoryRef = useRef<string[]>(['home']);
   const lastBackPressRef = useRef<number>(0);
+  const [fromNotifications, setFromNotifications] = useState<boolean>(false);
+
+  const handleBackFromNotifications = useCallback(() => {
+    setFromNotifications(false);
+    setSelectedSiteId(null);
+    setSelectedWorkerId(null);
+    setSelectedKhataPartyId(null);
+    setActiveEntryKind(null);
+    setIsNewSite(false);
+    navigate('notifications', '/notifications', null, false, null, null);
+  }, []);
 
   function navigate(
     newTab: string,
@@ -684,22 +702,74 @@ function MainApp() {
     }
   }
 
+  const handleBackFromProfile = useCallback(() => {
+    if (fromNotifications) {
+      handleBackFromNotifications();
+      return;
+    }
+    const prevStack = tabHistoryRef.current.filter((t) => t !== 'profile');
+    const prevTab = prevStack.length > 0 ? prevStack[prevStack.length - 1] : 'home';
+    tabHistoryRef.current = prevStack.length > 0 ? prevStack : ['home'];
+    navigate(prevTab, prevTab === 'home' ? '/' : `/${prevTab}`, null, false, null, null);
+  }, [fromNotifications, handleBackFromNotifications]);
+
+  const handleBackFromBanks = useCallback(() => {
+    if (fromNotifications) {
+      handleBackFromNotifications();
+      return;
+    }
+    const prevStack = tabHistoryRef.current.filter((t) => t !== 'banks');
+    const prevTab = prevStack.length > 0 ? prevStack[prevStack.length - 1] : 'home';
+    tabHistoryRef.current = prevStack.length > 0 ? prevStack : ['home'];
+    navigate(prevTab, prevTab === 'home' ? '/' : `/${prevTab}`, null, false, null, null);
+  }, [fromNotifications, handleBackFromNotifications]);
+
+  const handleBackFromEntry = useCallback(() => {
+    const sId = activeEntryParams?.siteId;
+    const wId = activeEntryParams?.workerId;
+    setActiveEntryKind(null);
+    setActiveEntryParams(null);
+    if (sId) {
+      navigate('sites', `/sites/${sId}`, sId, false);
+    } else if (wId) {
+      navigate('team', `/team/${wId}`, null, false, wId);
+    } else {
+      navigate('home', '/', null, false, null, null);
+    }
+  }, [activeEntryParams]);
+
   // Handle hardware / Android system back button gracefully
   useEffect(() => {
     if (Platform.OS === 'web') return;
 
     const onHardwareBackPress = () => {
+      // 0a. If Quick Entry FAB modal is open, close it
+      if (showFabModal) {
+        setShowFabModal(false);
+        return true;
+      }
+
+      // 0b. If Server Config modal is open, close it
+      if (showServerConfig) {
+        setShowServerConfig(false);
+        return true;
+      }
+
       // 1. If any form page is open, close it
       if (form) {
         closeForm();
         return true;
       }
 
-      // 1b. If viewing an entry page, go back to overview
+      // 1b. If navigated from notifications, return straight to notifications page
+      if (fromNotifications) {
+        handleBackFromNotifications();
+        return true;
+      }
+
+      // 1c. If viewing an entry page, go back to previous view (site / worker / home)
       if (activeEntryKind) {
-        setActiveEntryKind(null);
-        setActiveEntryParams(null);
-        navigate('home', '/', null, false, null, null);
+        handleBackFromEntry();
         return true;
       }
 
@@ -747,9 +817,15 @@ function MainApp() {
         return true;
       }
 
-      // 4. If in profile screen, go back to home tab
+      // 4. If in profile screen, go back to previous screen (e.g. settings) or home
       if (tab === 'profile') {
-        navigate('home', '/', null, false, null, null);
+        handleBackFromProfile();
+        return true;
+      }
+
+      // 4b. If in banks screen, go back to previous screen (e.g. settings) or home
+      if (tab === 'banks') {
+        handleBackFromBanks();
         return true;
       }
 
@@ -785,7 +861,18 @@ function MainApp() {
       onHardwareBackPress
     );
     return () => backSub.remove();
-  }, [form, isNewSite, selectedSiteId, selectedWorkerId, selectedKhataPartyId, activeEntryKind, tab, lang]);
+  }, [
+    form,
+    isNewSite,
+    selectedSiteId,
+    selectedWorkerId,
+    selectedKhataPartyId,
+    activeEntryKind,
+    tab,
+    lang,
+    showFabModal,
+    showServerConfig,
+  ]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -888,6 +975,13 @@ function MainApp() {
           setSelectedSiteId(null);
           setSelectedWorkerId(null);
           setActiveEntryKind(null);
+        } else if (path === '/notifications' || path === '/alerts') {
+          setTab('notifications');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setSelectedKhataPartyId(null);
+          setActiveEntryKind(null);
         } else if (path === '/profile') {
           setTab('profile');
           setIsNewSite(false);
@@ -923,7 +1017,12 @@ function MainApp() {
     }
   }, []);
 
-  function handleNavigate(targetTab: string, targetId?: string) {
+  function handleNavigate(targetTab: string, targetId?: string, isFromNotification = false) {
+    if (!isFromNotification) {
+      setFromNotifications(false);
+    } else {
+      setFromNotifications(true);
+    }
     let actualTab = targetTab;
     if (targetTab === 'workers' || targetTab === 'labour') {
       actualTab = 'team';
@@ -1542,7 +1641,7 @@ function MainApp() {
               error={error}
               siteId={activeEntryParams?.siteId}
               bill={activeEntryParams?.bill}
-              onBack={() => navigate('home', '/', null, false, null, null)}
+              onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('MATERIAL', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
               }
@@ -1557,7 +1656,7 @@ function MainApp() {
               error={error}
               siteId={activeEntryParams?.siteId}
               workerId={activeEntryParams?.workerId}
-              onBack={() => navigate('home', '/', null, false, null, null)}
+              onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('WAGE_PAYMENT', vals, activeEntryParams?.siteId, activeEntryParams?.workerId)
               }
@@ -1571,7 +1670,7 @@ function MainApp() {
               busy={busy}
               error={error}
               siteId={activeEntryParams?.siteId}
-              onBack={() => navigate('home', '/', null, false, null, null)}
+              onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('RECEIPT', vals, activeEntryParams?.siteId)
               }
@@ -1586,7 +1685,7 @@ function MainApp() {
               error={error}
               siteId={activeEntryParams?.siteId}
               bill={activeEntryParams?.bill}
-              onBack={() => navigate('home', '/', null, false, null, null)}
+              onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('EXPENSE', vals, activeEntryParams?.siteId, undefined, activeEntryParams?.bill)
               }
@@ -1600,7 +1699,7 @@ function MainApp() {
               busy={busy}
               error={error}
               siteId={activeEntryParams?.siteId}
-              onBack={() => navigate('home', '/', null, false, null, null)}
+              onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('EXTRA', vals, activeEntryParams?.siteId)
               }
@@ -1627,6 +1726,8 @@ function MainApp() {
                 <SitesPage
                   data={data}
                   selectedSiteId={selectedSiteId}
+                  fromNotifications={fromNotifications}
+                  onBackFromDetail={handleBackFromNotifications}
                   onSelectSite={(sId) => navigate('sites', sId ? `/sites/${sId}` : '/sites', sId, false)}
                   onOpenNewSite={() => navigate('sites', '/sites/new', null, true)}
                   onEditSite={(s) => openForm(siteForm(s))}
@@ -1634,7 +1735,7 @@ function MainApp() {
                   onOpenAttendance={openAttendanceModal}
                   onShareReport={(sId) => handleShareReport(false, sId)}
                   onOpenProfile={() => handleNavigate('profile')}
-                  onBack={() => navigate('home', '/', null, false, null, null)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -1643,7 +1744,7 @@ function MainApp() {
               {tab === 'attendance' && (
                 <AttendancePage
                   data={data}
-                  onBack={() => navigate('home', '/', null, false, null, null)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false, null, null)}
                   onOpenAttendanceModal={openAttendanceModal}
                   onOpenProfile={() => handleNavigate('profile')}
                   refreshing={refreshing}
@@ -1657,7 +1758,7 @@ function MainApp() {
                   data={data}
                   busy={busy}
                   error={error}
-                  onBack={() => navigate('home', '/', null, false, null, null)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false, null, null)}
                   onOpenProfile={() => handleNavigate('profile')}
                   onSaveEntry={(kind, vals, sId, wId) =>
                     handleSaveEntry(kind, vals, sId, wId)
@@ -1671,6 +1772,8 @@ function MainApp() {
                 <LabourPage
                   data={data}
                   selectedWorkerId={selectedWorkerId}
+                  fromNotifications={fromNotifications}
+                  onBackFromDetail={handleBackFromNotifications}
                   onSelectWorker={(wId) =>
                     navigate('team', wId ? `/team/${wId}` : '/team', null, false, wId)
                   }
@@ -1679,7 +1782,7 @@ function MainApp() {
                     openEntryModal('WAGE_PAYMENT', undefined, wId)
                   }
                   onOpenProfile={() => handleNavigate('profile')}
-                  onBack={() => navigate('home', '/', null, false, null, null)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -1691,7 +1794,7 @@ function MainApp() {
                   onOpenEntry={openEntryModal}
                   onOpenVoidModal={(entry) => openForm(voidForm(entry))}
                   onOpenProfile={() => handleNavigate('profile')}
-                  onBack={() => navigate('home', '/', null, false, null, null)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false, null, null)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                 />
@@ -1711,7 +1814,7 @@ function MainApp() {
               {tab === 'profile' && (
                 <ProfilePage
                   data={data}
-                  onBack={() => navigate('home', '/', null, false)}
+                  onBack={handleBackFromProfile}
                   onUpdateProfile={handleUpdateProfile}
                   onLogout={handleLogout}
                   onRefresh={() => refresh()}
@@ -1723,7 +1826,7 @@ function MainApp() {
                 <NotificationsPage
                   data={data}
                   onBack={() => navigate('home', '/', null, false)}
-                  onNavigateTab={handleNavigate}
+                  onNavigateTab={(targetTab, targetId) => handleNavigate(targetTab, targetId, true)}
                   onRefresh={() => refresh()}
                   refreshing={refreshing}
                   readIds={readNotificationIds}
@@ -1746,7 +1849,7 @@ function MainApp() {
               {tab === 'banks' && (
                 <BanksPage
                   data={data}
-                  onBack={() => navigate('home', '/', null, false)}
+                  onBack={handleBackFromBanks}
                   onNavigateTab={handleNavigate}
                   onRefresh={() => refresh()}
                   refreshing={refreshing}
@@ -1757,6 +1860,8 @@ function MainApp() {
                 <KhataPage
                   data={data}
                   selectedPartyId={selectedKhataPartyId}
+                  fromNotifications={fromNotifications}
+                  onBackFromDetail={handleBackFromNotifications}
                   onSelectParty={(pId) => {
                     setSelectedKhataPartyId(pId);
                     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -1766,7 +1871,7 @@ function MainApp() {
                       }
                     }
                   }}
-                  onBack={() => navigate('home', '/', null, false)}
+                  onBack={fromNotifications ? handleBackFromNotifications : () => navigate('home', '/', null, false)}
                   refreshing={refreshing}
                   onRefresh={() => refresh()}
                   onKhataCommand={handleKhataCommand}
@@ -1828,13 +1933,13 @@ function MainApp() {
                   style={styles.fabActionBtn}
                   onPress={() => {
                     setShowFabModal(false);
-                    openEntryPage('MATERIAL');
+                    openForm(workerForm());
                   }}
                 >
-                  <View style={[styles.fabActionIconBox, { backgroundColor: '#FEF3C7' }]}>
-                    <Ionicons name="cube" size={24} color="#D97706" />
+                  <View style={[styles.fabActionIconBox, { backgroundColor: '#F5F3FF' }]}>
+                    <Ionicons name="person-add" size={24} color="#7C3AED" />
                   </View>
-                  <Text style={styles.fabActionLabel}>Material Bill</Text>
+                  <Text style={styles.fabActionLabel}>Add Worker</Text>
                 </Pressable>
 
                 <Pressable

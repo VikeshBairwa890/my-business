@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   RefreshControl,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -50,6 +51,35 @@ export function PaymentsPage({
   const { t, lang } = useLanguage();
   const [subpage, setSubpage] = useState<'MENU' | 'RECEIVED' | 'PAYMENT'>(defaultView);
 
+  const handleBackToMenu = () => {
+    setSubpage('MENU');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/payments');
+    }
+  };
+
+  // Intercept hardware / mobile back press so user returns to Payments Menu instead of Home
+  useEffect(() => {
+    if (subpage === 'MENU') return;
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        const onPopState = () => {
+          setSubpage('MENU');
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+      }
+      return;
+    }
+
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSubpage('MENU');
+      return true;
+    });
+    return () => backSub.remove();
+  }, [subpage]);
+
   // If user selected Received Payment (पैसा आया)
   if (subpage === 'RECEIVED') {
     return (
@@ -57,7 +87,7 @@ export function PaymentsPage({
         data={data}
         busy={busy}
         error={error}
-        onBack={() => setSubpage('MENU')}
+        onBack={handleBackToMenu}
         onSave={(vals) => onSaveEntry('RECEIPT', vals, vals.site_id)}
         onRefresh={onRefresh}
         refreshing={refreshing}
@@ -74,7 +104,7 @@ export function PaymentsPage({
         data={data}
         busy={busy}
         error={error}
-        onBack={() => setSubpage('MENU')}
+        onBack={handleBackToMenu}
         onSave={(kind, vals, wId) => onSaveEntry(kind, vals, vals.site_id, wId)}
         onRefresh={onRefresh}
         refreshing={refreshing}
@@ -93,14 +123,24 @@ export function PaymentsPage({
       title: 'Received Payment',
       icon: 'arrow-down-circle',
       iconColor: '#2563EB',
-      onPress: () => setSubpage('RECEIVED'),
+      onPress: () => {
+        setSubpage('RECEIVED');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.history.pushState({ subpage: 'RECEIVED' }, '', '/payments/receive');
+        }
+      },
     },
     {
       id: 'payment',
       title: 'Payment',
       icon: 'arrow-up-circle',
       iconColor: '#2563EB',
-      onPress: () => setSubpage('PAYMENT'),
+      onPress: () => {
+        setSubpage('PAYMENT');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.history.pushState({ subpage: 'PAYMENT' }, '', '/payments/out');
+        }
+      },
     },
   ];
 

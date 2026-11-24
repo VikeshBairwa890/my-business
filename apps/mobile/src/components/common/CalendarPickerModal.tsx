@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -7,6 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   useWindowDimensions,
+  Animated,
+  Platform,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../icons/AppIcon';
@@ -17,6 +19,8 @@ interface CalendarPickerModalProps {
   selectedDate?: string; // YYYY-MM-DD format
   minDate?: string; // YYYY-MM-DD format
   maxDate?: string; // YYYY-MM-DD format
+  minDateMessage?: string;
+  maxDateMessage?: string;
   allowClear?: boolean;
   onSelect: (dateStr: string) => void;
   onClose: () => void;
@@ -64,6 +68,8 @@ export function CalendarPickerModal({
   selectedDate = '',
   minDate = '',
   maxDate = '',
+  minDateMessage,
+  maxDateMessage,
   allowClear = false,
   onSelect,
   onClose,
@@ -90,16 +96,24 @@ export function CalendarPickerModal({
   });
 
   const [activeDate, setActiveDate] = useState<string>(selectedDate || todayIso);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const errorTimerRef = useRef<any>(null);
+  const alertAnim = useRef(new Animated.Value(0)).current;
 
   // Sync internal state when opened or prop changes
   useEffect(() => {
     if (visible) {
+      setErrorMessage('');
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
       const initial = selectedDate || todayIso;
       setActiveDate(initial);
       if (/^\d{4}-\d{2}-\d{2}$/.test(initial)) {
         setCurrentYear(parseInt(initial.slice(0, 4), 10));
         setCurrentMonth(parseInt(initial.slice(5, 7), 10) - 1);
       }
+    } else {
+      setErrorMessage('');
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
     }
   }, [visible, selectedDate, todayIso]);
 
@@ -165,7 +179,28 @@ export function CalendarPickerModal({
   };
 
   const handleSelectDay = (iso: string, disabled: boolean) => {
-    if (disabled || !iso) return;
+    if (!iso) return;
+    if (disabled) {
+      const msg =
+        minDate && iso < minDate
+          ? minDateMessage || 'रिमाइंडर Due Date आज या पिछली तारीख से पहले की नहीं हो सकती!'
+          : maxDate && iso > maxDate
+            ? maxDateMessage || 'यह तारीख नहीं चुन सकते'
+            : 'अमान्य तारीख';
+      setErrorMessage(msg);
+      alertAnim.setValue(0);
+      Animated.timing(alertAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => {
+        setErrorMessage('');
+      }, 3500);
+      return;
+    }
     setActiveDate(iso);
     onSelect(iso);
     onClose();
@@ -187,6 +222,40 @@ export function CalendarPickerModal({
     >
       <View style={styles.modalOverlay}>
         <Pressable style={styles.backdropPressable} onPress={onClose} />
+
+        {/* In-Modal Foreground Alert: Single toast in front of the modal */}
+        {errorMessage ? (
+          <View style={styles.modalFloatingAlert} pointerEvents="box-none">
+            <Animated.View
+              style={[
+                styles.modalAlertCard,
+                {
+                  opacity: alertAnim,
+                  transform: [
+                    {
+                      translateY: alertAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-10, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.modalAlertIconWrap}>
+                <AppIcon name="alert-circle" size={18} color="#EF4444" />
+              </View>
+              <Text style={styles.modalAlertText}>{errorMessage}</Text>
+              <Pressable
+                onPress={() => setErrorMessage('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.modalAlertCloseBtn}
+              >
+                <AppIcon name="close" size={16} color="#94A3B8" />
+              </Pressable>
+            </Animated.View>
+          </View>
+        ) : null}
 
         <View style={[styles.dialogCard, isDesktop && styles.desktopDialogCard]}>
           {/* Header */}
@@ -272,13 +341,11 @@ export function CalendarPickerModal({
                 <Pressable
                   key={cell.isoString}
                   onPress={() => handleSelectDay(cell.isoString, cell.isDisabled)}
-                  disabled={cell.isDisabled}
                   style={({ pressed }) => [
                     styles.dayCell,
                     cell.isToday && styles.dayCellToday,
                     cell.isSelected && styles.dayCellSelected,
-                    cell.isDisabled && styles.dayCellDisabled,
-                    pressed && !cell.isDisabled && { opacity: 0.7 },
+                    pressed && { opacity: 0.7 },
                   ]}
                 >
                   <Text
@@ -286,7 +353,6 @@ export function CalendarPickerModal({
                       styles.dayText,
                       cell.isToday && styles.dayTextToday,
                       cell.isSelected && styles.dayTextSelected,
-                      cell.isDisabled && styles.dayTextDisabled,
                     ]}
                   >
                     {cell.day}
@@ -337,6 +403,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+  },
+  modalFloatingAlert: {
+    position: 'absolute',
+    top: 24,
+    left: 16,
+    right: 16,
+    alignItems: 'center',
+    zIndex: 999999,
+    elevation: 9999,
+  },
+  modalAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: 420,
+    width: '100%',
+    backgroundColor: '#260B0E',
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  modalAlertIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  modalAlertText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FEE2E2',
+    lineHeight: 18,
+  },
+  modalAlertCloseBtn: {
+    padding: 2,
+    marginLeft: 6,
   },
   backdropPressable: {
     ...StyleSheet.absoluteFill,

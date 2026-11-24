@@ -244,14 +244,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   floatingOverlay: {
-    position: 'absolute',
+    position: (Platform.OS === 'web' ? 'fixed' : 'absolute') as any,
     top: Platform.OS === 'web' ? 16 : 50,
     left: 0,
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 999999,
-    elevation: 999,
+    zIndex: 99999999,
+    elevation: 9999,
   },
   toastCard: {
     maxWidth: 540,

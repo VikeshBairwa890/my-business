@@ -117,12 +117,18 @@ export function WorkerFormModal({
         : ''
   );
 
-  // Preserve existing overtime_rate silently for backend compatibility
-  const preservedOvertimeRate = spec.initial.overtime_rate
-    ? String(spec.initial.overtime_rate)
-    : activeWorker
-      ? String(Number(activeWorker.overtime_rate || 0) / 100)
-      : '0';
+  // Overtime Rate per hour
+  const [overtimeRate, setOvertimeRate] = useState<string>(() => {
+    if (spec.initial.overtime_rate !== undefined && spec.initial.overtime_rate !== '') {
+      const n = Number(spec.initial.overtime_rate);
+      return n > 0 ? String(n) : '';
+    }
+    if (activeWorker?.overtime_rate !== undefined) {
+      const n = Number(activeWorker.overtime_rate);
+      return n > 0 ? String(n / 100) : '';
+    }
+    return '';
+  });
 
   // Active Status
   const [active, setActive] = useState<boolean>(
@@ -262,12 +268,15 @@ export function WorkerFormModal({
     const finalSkill =
       selectedSkillId === 'other' ? customSkill.trim() : selectedSkill.name;
 
+    const otNum = parseFloat(overtimeRate);
+    const validOtNum = !isNaN(otNum) && otNum > 0 ? otNum : 0;
+
     onSave({
       name: cleanName,
       phone: phone.trim(),
       skill: finalSkill,
       daily_rate: String(dailyNum),
-      overtime_rate: preservedOvertimeRate,
+      overtime_rate: String(validOtNum),
       active: active ? 'true' : 'false',
       photo: photo.trim(),
     });
@@ -472,22 +481,51 @@ export function WorkerFormModal({
             )}
           </View>
 
-          {/* Daily Wage Rate */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>
-              {lang === 'hi' ? 'दैनिक दिहाड़ी (₹/दिन)' : 'Daily Wage Rate'} <Text style={styles.reqStar}>*</Text>
-            </Text>
-            <View style={styles.inputBox}>
-              <Text style={styles.rupeePrefix}>₹</Text>
-              <TextInput
-                value={dailyRate}
-                onChangeText={setDailyRate}
-                placeholder="700"
-                placeholderTextColor="#94A3B8"
-                style={[styles.textInput, styles.rateInputText]}
-                keyboardType="numeric"
-              />
-              <Text style={styles.unitSuffix}>/ day</Text>
+          {/* Rates Row — 2 Columns (Daily Wage & Overtime Rate) */}
+          <View style={styles.twoColRatesRow}>
+            {/* Column 1: Daily Wage Rate */}
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={styles.fieldLabel} numberOfLines={1}>
+                {lang === 'hi' ? 'दैनिक दिहाड़ी' : 'Daily Wage'} <Text style={styles.reqStar}>*</Text>
+              </Text>
+              <View style={styles.rateInputBox}>
+                <Text style={styles.rupeePrefix}>₹</Text>
+                <TextInput
+                  value={dailyRate}
+                  onChangeText={setDailyRate}
+                  placeholder="700"
+                  placeholderTextColor="#94A3B8"
+                  style={[styles.textInput, styles.rateInputText]}
+                  keyboardType="numeric"
+                />
+                <View style={styles.unitBadge}>
+                  <Text style={styles.unitSuffix}>/day</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Column 2: Overtime Rate */}
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={styles.fieldLabel} numberOfLines={1}>
+                {lang === 'hi' ? 'ओवरटाइम दर' : 'Overtime Rate'}
+              </Text>
+              <View style={styles.rateInputBox}>
+                <Text style={styles.rupeePrefix}>₹</Text>
+                <TextInput
+                  value={overtimeRate}
+                  onChangeText={(text) => {
+                    const cleaned = text.replace(/[^0-9.]/g, '');
+                    setOvertimeRate(cleaned);
+                  }}
+                  placeholder="100"
+                  placeholderTextColor="#94A3B8"
+                  style={[styles.textInput, styles.rateInputText]}
+                  keyboardType="numeric"
+                />
+                <View style={styles.unitBadge}>
+                  <Text style={styles.unitSuffix}>/hr</Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -756,6 +794,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     gap: 14,
   },
+  twoColRatesRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   fieldGroup: {
     gap: 6,
   },
@@ -778,11 +821,33 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     paddingHorizontal: 12,
   },
+  rateInputBox: {
+    height: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    overflow: 'hidden',
+  },
   textInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 14,
     color: '#0F172A',
     paddingVertical: 0,
+    ...(Platform.OS === 'web'
+      ? ({
+        outline: 'none',
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        border: 'none',
+        boxShadow: 'none',
+      } as any)
+      : {}),
   },
   phonePrefix: {
     fontSize: 13.5,
@@ -795,18 +860,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E1',
   },
   rupeePrefix: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
+    flexShrink: 0,
   },
   rateInputText: {
     fontSize: 15,
     fontWeight: '700',
   },
+  unitBadge: {
+    backgroundColor: '#EEF2F6',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   unitSuffix: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    flexShrink: 0,
+    lineHeight: 14,
+    ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap', userSelect: 'none' } as any) : {}),
   },
   dropdownValText: {
     flex: 1,

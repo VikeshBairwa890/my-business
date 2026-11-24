@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   RefreshControl,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -52,6 +53,49 @@ export function AttendancePage({
 }: AttendancePageProps) {
   const [subpage, setSubpage] = useState<'MENU' | 'DAILY' | 'MONTHLY' | 'BULK'>(defaultView);
 
+  const handleBackToMenu = () => {
+    setSubpage('MENU');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.location.pathname.startsWith('/attendance/')) {
+        window.history.pushState(null, '', '/attendance');
+      }
+    }
+  };
+
+  const handleSelectSubpage = (target: 'DAILY' | 'MONTHLY' | 'BULK') => {
+    setSubpage(target);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.history.pushState({ attendanceSubpage: target }, '', `/attendance/${target.toLowerCase()}`);
+    }
+  };
+
+  // Mobile Hardware Back Button (Android back button & gesture navigation)
+  useEffect(() => {
+    if (subpage === 'MENU') return;
+
+    const onBackPress = () => {
+      handleBackToMenu();
+      return true; // Stop event bubbling so App.tsx does not jump straight to home!
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    let popListener: (() => void) | null = null;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      popListener = () => {
+        setSubpage('MENU');
+      };
+      window.addEventListener('popstate', popListener);
+    }
+
+    return () => {
+      sub.remove();
+      if (popListener && typeof window !== 'undefined') {
+        window.removeEventListener('popstate', popListener);
+      }
+    };
+  }, [subpage]);
+
   // If user selected Monthly Attendance page
   if (subpage === 'MONTHLY') {
     return (
@@ -59,7 +103,7 @@ export function AttendancePage({
         data={data}
         onOpenAttendanceModal={onOpenAttendanceModal}
         onOpenProfile={onOpenProfile}
-        onBack={() => setSubpage('MENU')}
+        onBack={handleBackToMenu}
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
@@ -73,7 +117,7 @@ export function AttendancePage({
         data={data}
         onOpenAttendanceModal={onOpenAttendanceModal}
         onOpenProfile={onOpenProfile}
-        onBack={() => setSubpage('MENU')}
+        onBack={handleBackToMenu}
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
@@ -85,7 +129,7 @@ export function AttendancePage({
     return (
       <BulkAttendancePage
         data={data}
-        onBack={() => setSubpage('MENU')}
+        onBack={handleBackToMenu}
         refreshing={refreshing}
         onRefresh={onRefresh}
         onBulkAttendanceSaved={onBulkAttendanceSaved}
@@ -103,7 +147,7 @@ export function AttendancePage({
       icon: 'people',
       iconColor: '#2563EB',
       iconBg: '#EFF6FF',
-      onPress: () => setSubpage('BULK'),
+      onPress: () => handleSelectSubpage('BULK'),
     },
     {
       id: 'daily',
@@ -111,7 +155,7 @@ export function AttendancePage({
       icon: 'time',
       iconColor: '#D97706',
       iconBg: '#FEF3C7',
-      onPress: () => setSubpage('DAILY'),
+      onPress: () => handleSelectSubpage('DAILY'),
     },
     {
       id: 'monthly',
@@ -119,7 +163,7 @@ export function AttendancePage({
       icon: 'calendar',
       iconColor: '#C2410C',
       iconBg: '#FFEDD5',
-      onPress: () => setSubpage('MONTHLY'),
+      onPress: () => handleSelectSubpage('MONTHLY'),
     },
   ];
 

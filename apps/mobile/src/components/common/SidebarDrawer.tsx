@@ -144,39 +144,57 @@ export function SidebarDrawer({
           {/* 1. TOP SECTION: USER & BUSINESS PROFILE CARD */}
           {/* ========================================================= */}
           <View style={styles.profileHeaderCard}>
-            {/* Close Button at top-right */}
-            <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={20} color="#0F172A" />
-            </Pressable>
-
             <View style={styles.avatarRow}>
-              {/* Profile Avatar with Online Dot */}
-              <View style={styles.avatarWrap}>
-                {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarFallbackText}>{initials}</Text>
-                  </View>
-                )}
-                <View style={styles.onlineDot} />
-              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.profileInfoBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => {
+                  if (onOpenProfile) {
+                    handleItemPress(onOpenProfile);
+                  }
+                }}
+                accessibilityLabel="View Profile"
+              >
+                {/* Profile Avatar with Online Dot */}
+                <View style={styles.avatarWrap}>
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+                  ) : (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarFallbackText}>{initials}</Text>
+                    </View>
+                  )}
+                  <View style={styles.onlineDot} />
+                </View>
 
-              <View style={styles.profileTextWrap}>
-                <Text style={styles.contractorName} numberOfLines={1}>
-                  {displayName}
-                </Text>
-                <Text style={styles.firmName} numberOfLines={1}>
-                  {firmName}
-                </Text>
-                {user?.phone ? (
-                  <Text style={styles.phoneText}>+91 {user.phone}</Text>
-                ) : null}
-              </View>
+                <View style={styles.profileTextWrap}>
+                  <Text style={styles.contractorName} numberOfLines={1}>
+                    {displayName}
+                  </Text>
+                  <Text style={styles.firmName} numberOfLines={1}>
+                    {firmName}
+                  </Text>
+                  {user?.phone ? (
+                    <Text style={styles.phoneText}>+91 {user.phone}</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+
+              {/* Close Button right next to name, brought down into row */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.closeBtn,
+                  pressed && { opacity: 0.75, backgroundColor: '#E2E8F0' },
+                ]}
+                onPress={onClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Close Menu"
+              >
+                <Ionicons name="close" size={20} color="#0F172A" />
+              </Pressable>
             </View>
-
-
-
           </View>
 
           {/* ========================================================= */}
@@ -237,7 +255,7 @@ export function SidebarDrawer({
             {/* Reports */}
             <Pressable
               style={({ pressed }) => [styles.menuItem, pressed && styles.itemPressed]}
-              onPress={() => handleItemPress(() => onShareReport?.() || onNavigateTab('reports'))}
+              onPress={() => handleItemPress(() => onNavigateTab('reports'))}
             >
               <View style={[styles.menuIconBox, { backgroundColor: '#F3E8FF' }]}>
                 <Ionicons name="document-text" size={18} color="#9333EA" />
@@ -381,29 +399,31 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    position: 'relative',
     ...Platform.select({
       web: { boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)' },
       default: { elevation: 2 },
     }),
   },
-  closeBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 48 : 24,
-    right: 14,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-  },
   avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'space-between',
+    marginBottom: 4,
     marginTop: 6,
+  },
+  profileInfoBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarWrap: {
     position: 'relative',

@@ -471,19 +471,11 @@ export function DailyHaziriPage({
                         <Text style={styles.workerName} numberOfLines={1}>
                           {worker.name}
                         </Text>
-                        {(worker.skill || otMins > 0) ? (
+                        {worker.skill ? (
                           <View style={styles.workerSubRow}>
-                            {worker.skill ? (
-                              <Text style={styles.workerSkillText} numberOfLines={1}>
-                                {worker.skill}
-                              </Text>
-                            ) : null}
-                            {otMins > 0 ? (
-                              <>
-                                {worker.skill ? <Text style={styles.metaDot}>•</Text> : null}
-                                <Text style={styles.metaOt}>OT: {otMins}m</Text>
-                              </>
-                            ) : null}
+                            <Text style={styles.workerSkillText} numberOfLines={1}>
+                              {worker.skill}
+                            </Text>
                           </View>
                         ) : null}
                       </View>
@@ -891,11 +883,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#0284C7',
     fontWeight: '600',
-  },
-  metaOt: {
-    fontSize: 10,
-    color: '#D97706',
-    fontWeight: '700',
   },
 
   // Right Side

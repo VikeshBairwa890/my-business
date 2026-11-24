@@ -70,7 +70,6 @@ export function KhataEntryFormPage({
 
   const [date, setDate] = useState(ymdToDmy(entry ? getEntryDateStr(entry) : today()));
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const isTodayDate = (dmyToYmd(date) || '') === today();
   const [amountText, setAmountText] = useState(
     entry?.amount ? String(Number(entry.amount) / 100) : ''
   );
@@ -401,11 +400,6 @@ export function KhataEntryFormPage({
                   <Text style={styles.dateValueText}>
                     {date || 'Select Date'}
                   </Text>
-                  {isTodayDate ? (
-                    <View style={styles.todayPill}>
-                      <Text style={styles.todayPillText}>Today</Text>
-                    </View>
-                  ) : null}
                 </View>
                 <View style={styles.calendarIconBtn}>
                   <AppIcon name="calendar-outline" size={19} color={Colors.primary} />
@@ -672,7 +666,9 @@ export function KhataEntryFormPage({
         title="Select Entry Date"
         selectedDate={dmyToYmd(date) || today()}
         onSelect={(picked) => {
-          setDate(ymdToDmy(picked));
+          if (picked) {
+            setDate(ymdToDmy(picked));
+          }
           setCalendarOpen(false);
         }}
         onClose={() => setCalendarOpen(false)}
@@ -741,8 +737,16 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   dateSelectBox: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
     paddingHorizontal: 14,
+    width: '100%',
     ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
   dateValueWrap: {
@@ -754,19 +758,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.textPrimary,
-  },
-  todayPill: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  todayPillText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: Colors.primary,
   },
   input: {
     flex: 1,

@@ -29,6 +29,8 @@ import { getDocFromIndexedDB, fetchDocFromServer } from '../../storage/docStorag
 interface SitesPageProps {
   data: Snapshot;
   selectedSiteId: string | null;
+  fromNotifications?: boolean;
+  onBackFromDetail?: () => void;
   onSelectSite: (siteId: string | null) => void;
   onOpenNewSite: () => void;
   onEditSite: (site: Row) => void;
@@ -78,6 +80,8 @@ function getSiteStatusTheme(status: string) {
 export function SitesPage({
   data,
   selectedSiteId,
+  fromNotifications = false,
+  onBackFromDetail,
   onSelectSite,
   onOpenNewSite,
   onEditSite,
@@ -170,7 +174,7 @@ export function SitesPage({
           onOpenProfile={onOpenProfile}
           onRefresh={onRefresh}
           refreshing={refreshing}
-          onBack={() => onSelectSite(null)}
+          onBack={fromNotifications && onBackFromDetail ? onBackFromDetail : () => onSelectSite(null)}
         />
         <ScrollView
           style={styles.root}

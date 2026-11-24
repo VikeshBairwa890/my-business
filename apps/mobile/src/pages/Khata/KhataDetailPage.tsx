@@ -17,6 +17,7 @@ import { AppIcon } from '../../components/icons/AppIcon';
 import { Colors } from '../../theme/colors';
 import { showToast } from '../../context/ToastContext';
 import { today } from '../../forms';
+import { useLanguage } from '../../i18n';
 import {
   getDocFromIndexedDB,
   fetchDocFromServer,
@@ -28,7 +29,6 @@ import {
   PartySummary,
   buildPartyTimeline,
   formatShortDate,
-  addDaysYmd,
   getEntryDateStr,
   ymdToDmy,
   dmyToYmd,
@@ -59,9 +59,8 @@ export function KhataDetailPage({
   onEditEntry,
   onUpdateReminderDate,
 }: KhataDetailPageProps) {
+  const { t, lang } = useLanguage();
   const { party, balance, totalGave, totalGot, reminderDate } = summary;
-  const [showDuePicker, setShowDuePicker] = useState(false);
-  const [customDueDate, setCustomDueDate] = useState(ymdToDmy(reminderDate || addDaysYmd(3)));
   const [viewingProof, setViewingProof] = useState<{
     url: string;
     title: string;
@@ -161,17 +160,32 @@ export function KhataDetailPage({
   };
 
   const handleSetDue = (ymd: string | null) => {
-    onUpdateReminderDate(party.id, ymd);
-    setShowDuePicker(false);
-  };
-
-  const handleApplyCustomDue = () => {
-    const clean = dmyToYmd(customDueDate);
-    if (!clean) {
-      showToast('Enter due date as DD/MM/YYYY', 'e');
-      return;
+    if (ymd) {
+      const todayStr = today();
+      if (ymd < todayStr) {
+        showToast(
+          lang === 'hi'
+            ? 'रिमाइंडर Due Date आज या पिछली तारीख से पहले की नहीं हो सकती!'
+            : 'Due Date cannot be earlier than today!',
+          'e'
+        );
+        return;
+      }
     }
-    handleSetDue(clean);
+    onUpdateReminderDate(party.id, ymd);
+    if (ymd) {
+      showToast(
+        lang === 'hi'
+          ? `रिमाइंडर तारीख ${formatShortDate(ymd)} सेट हो गई`
+          : `Due Date set to ${formatShortDate(ymd)}`,
+        's'
+      );
+    } else {
+      showToast(
+        lang === 'hi' ? 'रिमाइंडर तारीख हटा दी गई' : 'Due date cleared',
+        'i'
+      );
+    }
   };
 
   return (
@@ -315,10 +329,10 @@ export function KhataDetailPage({
           <View style={styles.dualActionRow}>
             {isToGet ? (
               <Pressable
-                onPress={() => setShowDuePicker((v) => !v)}
+                onPress={() => setCalendarTarget('due')}
                 style={({ pressed }) => [
                   styles.dualActionBtn,
-                  showDuePicker && styles.dualActionBtnActive,
+                  reminderDate && styles.dualActionBtnActive,
                   pressed && { opacity: 0.8 },
                 ]}
                 accessibilityLabel="Set Due Date"
@@ -327,7 +341,7 @@ export function KhataDetailPage({
                   <AppIcon name="calendar-outline" size={16} color="#D97706" />
                 </View>
                 <Text style={styles.dualActionText} numberOfLines={1}>
-                  Due Date
+                  {reminderDate ? `Due: ${formatShortDate(reminderDate)}` : 'Due Date'}
                 </Text>
               </Pressable>
             ) : null}
@@ -350,84 +364,6 @@ export function KhataDetailPage({
                 </Text>
               </Pressable>
             ) : null}
-          </View>
-        ) : null}
-
-        {/* Inline Due Date Quick Selector */}
-        {isToGet && showDuePicker ? (
-          <View style={styles.duePickerCard}>
-            <View style={styles.duePickerHeader}>
-              <View style={styles.duePickerTitleRow}>
-                <AppIcon name="calendar-outline" size={13} color="#D97706" />
-                <Text style={styles.duePickerTitle}>Reminder Date</Text>
-              </View>
-              <Pressable
-                onPress={() => setShowDuePicker(false)}
-                style={({ pressed }) => [styles.dueCloseBtn, pressed && { opacity: 0.6 }]}
-                hitSlop={8}
-                accessibilityLabel="Close reminder picker"
-              >
-                <AppIcon name="close" size={13} color="#92400E" />
-              </Pressable>
-            </View>
-
-            <View style={styles.dueQuickRow}>
-              {[
-                { label: 'Tomorrow', d: 1 },
-                { label: '+3 Days', d: 3 },
-                { label: '+7 Days', d: 7 },
-                { label: '+15 Days', d: 15 },
-              ].map((opt) => (
-                <Pressable
-                  key={opt.label}
-                  onPress={() => handleSetDue(addDaysYmd(opt.d))}
-                  style={({ pressed }) => [styles.dueQuickBtn, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.dueQuickBtnText}>{opt.label}</Text>
-                </Pressable>
-              ))}
-              {reminderDate ? (
-                <Pressable
-                  onPress={() => handleSetDue(null)}
-                  style={({ pressed }) => [
-                    styles.dueQuickBtn,
-                    { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <Text style={[styles.dueQuickBtnText, { color: '#DC2626' }]}>Clear</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <View style={styles.dueCustomRow}>
-              <Pressable
-                onPress={() => setCalendarTarget('due')}
-                style={({ pressed }) => [
-                  styles.dueCustomInput,
-                  styles.dueCustomPressable,
-                  pressed && { opacity: 0.85, borderColor: '#D97706' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dueCustomText,
-                    !customDueDate && { color: '#94A3B8' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {customDueDate || 'Select Due Date'}
-                </Text>
-                <AppIcon name="calendar-outline" size={15} color="#D97706" />
-              </Pressable>
-              {customDueDate ? (
-                <Pressable
-                  onPress={handleApplyCustomDue}
-                  style={({ pressed }) => [styles.dueApplyBtn, pressed && { opacity: 0.8 }]}
-                >
-                  <Text style={styles.dueApplyText}>Set Date</Text>
-                </Pressable>
-              ) : null}
-            </View>
           </View>
         ) : null}
 
@@ -585,23 +521,29 @@ export function KhataDetailPage({
           calendarTarget === 'from'
             ? 'Select Start Date'
             : calendarTarget === 'to'
-            ? 'Select End Date'
-            : 'Select Reminder Due Date'
+              ? 'Select End Date'
+              : 'Select Due Date'
+        }
+        allowClear={calendarTarget === 'due'}
+        minDate={calendarTarget === 'due' ? today() : undefined}
+        minDateMessage={
+          lang === 'hi'
+            ? 'रिमाइंडर Due Date आज या पिछली तारीख से पहले की नहीं हो सकती!'
+            : 'Due Date cannot be earlier than today!'
         }
         selectedDate={
           calendarTarget === 'from'
             ? dmyToYmd(customFrom) || today()
             : calendarTarget === 'to'
-            ? dmyToYmd(customTo) || today()
-            : dmyToYmd(customDueDate) || today()
+              ? dmyToYmd(customTo) || today()
+              : reminderDate || today()
         }
         onSelect={(picked) => {
           const dmy = ymdToDmy(picked);
           if (calendarTarget === 'from') setCustomFrom(dmy);
           else if (calendarTarget === 'to') setCustomTo(dmy);
           else if (calendarTarget === 'due') {
-            setCustomDueDate(dmy);
-            handleSetDue(picked);
+            handleSetDue(picked || null);
           }
           setCalendarTarget(null);
         }}

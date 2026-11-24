@@ -28,6 +28,8 @@ import { useLanguage } from '../../i18n';
 export interface LabourPageProps {
   data: Snapshot;
   selectedWorkerId?: string | null;
+  fromNotifications?: boolean;
+  onBackFromDetail?: () => void;
   onSelectWorker?: (workerId: string | null) => void;
   onOpenWorkerModal: (worker?: Row) => void;
   onOpenPaymentModal: (workerId: string) => void;
@@ -81,6 +83,8 @@ function getSkillIcon(skill: string = ''): string {
 export function LabourPage({
   data,
   selectedWorkerId: controlledWorkerId,
+  fromNotifications = false,
+  onBackFromDetail,
   onSelectWorker,
   onOpenWorkerModal,
   onOpenPaymentModal,
@@ -207,7 +211,7 @@ export function LabourPage({
       <WorkerDetailPage
         worker={selectedWorker}
         data={data}
-        onBack={() => handleSelectWorker(null)}
+        onBack={fromNotifications && onBackFromDetail ? onBackFromDetail : () => handleSelectWorker(null)}
         onOpenPaymentModal={(wId) => {
           handleSelectWorker(null);
           onOpenPaymentModal(wId);
