@@ -73,6 +73,21 @@ export function AttendancePage({
   useEffect(() => {
     if (subpage === 'MENU') return;
 
+    if (Platform.OS === 'web') {
+      let popListener: (() => void) | null = null;
+      if (typeof window !== 'undefined') {
+        popListener = () => {
+          setSubpage('MENU');
+        };
+        window.addEventListener('popstate', popListener);
+      }
+      return () => {
+        if (popListener && typeof window !== 'undefined') {
+          window.removeEventListener('popstate', popListener);
+        }
+      };
+    }
+
     const onBackPress = () => {
       handleBackToMenu();
       return true; // Stop event bubbling so App.tsx does not jump straight to home!
@@ -80,19 +95,8 @@ export function AttendancePage({
 
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-    let popListener: (() => void) | null = null;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      popListener = () => {
-        setSubpage('MENU');
-      };
-      window.addEventListener('popstate', popListener);
-    }
-
     return () => {
       sub.remove();
-      if (popListener && typeof window !== 'undefined') {
-        window.removeEventListener('popstate', popListener);
-      }
     };
   }, [subpage]);
 

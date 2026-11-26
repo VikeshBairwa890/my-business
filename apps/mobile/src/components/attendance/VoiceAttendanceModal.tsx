@@ -30,6 +30,7 @@ export interface VoiceAttendanceModalProps {
   onClose: () => void;
   workers: Row[];
   sites: Row[];
+  attendance?: Row[];
   selectedDate: string;
   activeWorker?: Row | null;
   onSaveAttendance: (parsed: {
@@ -205,6 +206,7 @@ export function VoiceAttendanceModal({
   onClose,
   workers,
   sites,
+  attendance = [],
   selectedDate,
   activeWorker = null,
   onSaveAttendance,
@@ -219,22 +221,48 @@ export function VoiceAttendanceModal({
 
   const recognitionRef = useRef<any>(null);
 
-  // Initialize and start Speech Recognition immediately on open
-  const startListening = () => {
+  // Initialize and start Speech Recognition
+  const startListening = async () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const isSecure =
+        window.isSecureContext ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+      if (!isSecure) {
+        setVoiceStatus('⚠️ Mobile mic requires HTTPS. Use HTTPS link or test on PC localhost.');
+        return;
+      }
+
       const SpeechRecognition =
         (window as any).SpeechRecognition ||
         (window as any).webkitSpeechRecognition ||
         null;
 
       if (!SpeechRecognition) {
-        setVoiceStatus('Browser mic support not available. Please allow microphone permission.');
+        setVoiceStatus('Browser mic support not available in this browser.');
         return;
       }
 
       try {
         if (recognitionRef.current) {
-          recognitionRef.current.abort();
+          try {
+            recognitionRef.current.abort();
+          } catch {}
+        }
+
+        // On mobile browsers, request mic permission explicitly if available
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (permErr: any) {
+            console.log('Mic permission error:', permErr);
+            if (permErr?.name === 'NotAllowedError' || permErr?.name === 'PermissionDeniedError') {
+              setIsListening(false);
+              setVoiceStatus('Microphone permission blocked. Please allow mic in browser settings.');
+              return;
+            }
+          }
         }
 
         const recognition = new SpeechRecognition();
@@ -254,9 +282,21 @@ export function VoiceAttendanceModal({
           setVoiceText(transcript);
         };
 
-        recognition.onerror = () => {
+        recognition.onerror = (event: any) => {
           setIsListening(false);
-          setVoiceStatus('आवाज़ साफ़ नहीं आई। दोबारा बोलने के लिए माइक दबाएं।');
+          const errCode = event?.error || '';
+          console.log('Speech recognition error:', errCode);
+          if (errCode === 'not-allowed') {
+            setVoiceStatus('Microphone permission denied. Allow mic access in browser.');
+          } else if (errCode === 'service-not-allowed') {
+            setVoiceStatus('Speech service not allowed over HTTP. Please use HTTPS on mobile.');
+          } else if (errCode === 'network') {
+            setVoiceStatus('Internet connection required for speech recognition.');
+          } else if (errCode === 'no-speech') {
+            setVoiceStatus('No speech detected. Tap mic and speak again.');
+          } else {
+            setVoiceStatus('आवाज़ साफ़ नहीं आई। दोबारा बोलने के लिए माइक दबाएं।');
+          }
         };
 
         recognition.onend = () => {
@@ -270,7 +310,7 @@ export function VoiceAttendanceModal({
         setVoiceStatus('माइक शुरू करने के लिए टैप करें');
       }
     } else {
-      setVoiceStatus('माइक पर टैप करके बोलें');
+      setVoiceStatus('Voice mic is supported in browser. Tap to speak.');
     }
   };
 
@@ -284,18 +324,22 @@ export function VoiceAttendanceModal({
     setIsListening(false);
   };
 
-  // Start listening immediately when modal opens
+  // Start listening: on desktop auto-starts, on mobile prompts user to tap to avoid gesture blocks
   useEffect(() => {
     if (visible) {
       setVoiceText('');
-      startListening();
+      if (isDesktop) {
+        startListening();
+      } else {
+        setVoiceStatus('बोलने के लिए माइक पर टैप करें');
+      }
     } else {
       stopListening();
     }
     return () => {
       stopListening();
     };
-  }, [visible]);
+  }, [visible, isDesktop]);
 
   // Parse voice text
   const parsed = useMemo(() => {
@@ -308,6 +352,43 @@ export function VoiceAttendanceModal({
       activeWorker
     );
   }, [voiceText, workers, sites, selectedDate, activeWorker]);
+
+  // Existing attendance check on this site or other sites for warning
+  const effectiveSiteId = parsed?.siteId || (sites[0]?.id ? String(sites[0].id) : '');
+
+  const existingRecord = useMemo(() => {
+    if (!parsed?.matchedWorker || !attendance?.length) return null;
+    return attendance.find(
+      (a) =>
+        a.worker_id === parsed.matchedWorker?.id &&
+        String(a.date).slice(0, 10) === parsed.date &&
+        a.site_id === effectiveSiteId
+    );
+  }, [parsed, attendance, effectiveSiteId]);
+
+  const otherSiteRecord = useMemo(() => {
+    if (!parsed?.matchedWorker || !attendance?.length) return null;
+    return attendance.find(
+      (a) =>
+        a.worker_id === parsed.matchedWorker?.id &&
+        String(a.date).slice(0, 10) === parsed.date &&
+        a.site_id !== effectiveSiteId
+    );
+  }, [parsed, attendance, effectiveSiteId]);
+
+  const otherSiteName = useMemo(() => {
+    if (!otherSiteRecord) return '';
+    const siteObj = sites.find((s) => s.id === otherSiteRecord.site_id);
+    return siteObj?.name || 'दूसरी साइट';
+  }, [otherSiteRecord, sites]);
+
+  const existingStatusLabel = useMemo(() => {
+    if (!existingRecord) return null;
+    const u = Number(existingRecord.units);
+    if (u === 1) return 'उपस्थित (Present)';
+    if (u === 0.5) return 'हाफ डे (Half Day)';
+    return 'अनुपस्थित (Absent)';
+  }, [existingRecord]);
 
   // Save attendance
   const handleConfirmSave = async () => {
@@ -439,11 +520,35 @@ export function VoiceAttendanceModal({
                       </View>
                     </View>
 
-                    {/* Single Confirm Save Button */}
+                    {/* Warning if already marked on another site today */}
+                    {otherSiteRecord && (
+                      <View style={styles.voiceWarningChip}>
+                        <AppIcon name="alert-circle" size={14} color="#D97706" />
+                        <Text style={styles.voiceWarningChipText}>
+                          ⚠️ आज {otherSiteName} पर पहले से दर्ज है ({Number(otherSiteRecord.units) === 1 ? 'Present' : Number(otherSiteRecord.units) === 0.5 ? 'Half Day' : 'Absent'})
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Notice if already marked on this site today */}
+                    {existingRecord && !otherSiteRecord && (
+                      <View style={styles.voiceNoticeChip}>
+                        <AppIcon name="alert-circle" size={14} color="#2563EB" />
+                        <Text style={styles.voiceNoticeChipText}>
+                          ⚠️ आज पहले से {existingStatusLabel} दर्ज है। सेव करने पर अपडेट हो जाएगी।
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Single Confirm Save / Update Button */}
                     <Pressable
                       onPress={handleConfirmSave}
                       disabled={saving}
-                      style={[styles.confirmSaveBtn, saving && { opacity: 0.7 }]}
+                      style={[
+                        styles.confirmSaveBtn,
+                        existingRecord && styles.confirmUpdateBtn,
+                        saving && { opacity: 0.7 },
+                      ]}
                     >
                       {saving ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
@@ -451,7 +556,7 @@ export function VoiceAttendanceModal({
                         <>
                           <AppIcon name="checkmark-done" size={18} color="#FFFFFF" />
                           <Text style={styles.confirmSaveBtnText}>
-                            हाजिरी दर्ज करें ({parsed.matchedWorker.name})
+                            {existingRecord ? 'हाजिरी अपडेट करें' : 'हाजिरी दर्ज करें'} ({parsed.matchedWorker.name})
                           </Text>
                         </>
                       )}
@@ -696,11 +801,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#16A34A',
     borderRadius: 12,
     paddingVertical: 12,
+    marginTop: 10,
     shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 4,
+  },
+  confirmUpdateBtn: {
+    backgroundColor: '#2563EB',
+    shadowColor: '#2563EB',
+  },
+  voiceWarningChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  voiceWarningChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+    flex: 1,
+  },
+  voiceNoticeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  voiceNoticeChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    flex: 1,
   },
   confirmSaveBtnText: {
     fontSize: 14,

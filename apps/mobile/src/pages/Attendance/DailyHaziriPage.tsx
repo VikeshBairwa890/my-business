@@ -564,6 +564,7 @@ export function DailyHaziriPage({
           onClose={() => setIsVoiceModalOpen(false)}
           workers={activeWorkers}
           sites={data.sites}
+          attendance={data.attendance}
           selectedDate={selectedDate}
           onSaveAttendance={handleSaveVoiceAttendance}
         />

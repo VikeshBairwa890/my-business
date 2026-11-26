@@ -117,7 +117,7 @@ export function PaymentOutPage({
         site_id: formSiteId,
         date: formDate,
         party: partyName,
-        amount: String(Math.round(Number(formAmount) * 100)),
+        amount: formAmount.trim(),
         description: descParts.join(' • '),
         unit: 'job',
         quantity: '1',

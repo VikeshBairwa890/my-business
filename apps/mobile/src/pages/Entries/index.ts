@@ -4,3 +4,4 @@ export { ReceivePaymentPage, ReceivePaymentPageProps } from './ReceivePaymentPag
 export { ExpenseBillPage, ExpenseBillPageProps } from './ExpenseBillPage';
 export { ExtraWorkPage, ExtraWorkPageProps } from './ExtraWorkPage';
 export { PaymentOutPage, PaymentOutPageProps } from './PaymentOutPage';
+export { PayBillPage, PayBillPageProps } from './PayBillPage';

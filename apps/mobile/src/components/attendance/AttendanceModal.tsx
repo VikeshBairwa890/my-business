@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -94,6 +94,56 @@ export function AttendanceModal({
     [data.workers, workerId]
   );
 
+  // Check if attendance already exists for this worker on this date
+  const existingAttendance = useMemo(() => {
+    if (!workerId || !date) return null;
+    const targetDate = String(date).slice(0, 10);
+    return (
+      (data.attendance || []).find(
+        (a) =>
+          a.worker_id === workerId &&
+          String(a.date).slice(0, 10) === targetDate
+      ) || null
+    );
+  }, [data.attendance, workerId, date]);
+
+  // When workerId or date changes, pre-fill form with existing attendance values
+  useEffect(() => {
+    if (existingAttendance) {
+      const u = Number(existingAttendance.units);
+      setUnits(u === 1 ? '1' : u === 0.5 ? '0.5' : '0');
+      const otMins = Number(existingAttendance.overtime_minutes || 0);
+      setOtHours(otMins > 0 ? String(Math.round(otMins / 60)) : '');
+      if (existingAttendance.notes) {
+        setNotes(existingAttendance.notes);
+      }
+    }
+  }, [existingAttendance]);
+
+  const existingStatusInfo = useMemo(() => {
+    if (!existingAttendance) return null;
+    const u = Number(existingAttendance.units);
+    const label =
+      u === 1
+        ? 'उपस्थित (Present)'
+        : u === 0.5
+          ? 'हाफ डे (Half Day)'
+          : 'अनुपस्थित (Absent)';
+    const siteObj = data.sites.find((s) => s.id === existingAttendance.site_id);
+    const siteName = siteObj?.name || 'Site';
+    const otMins = Number(existingAttendance.overtime_minutes || 0);
+    const otText = otMins > 0 ? ` • +${Math.round(otMins / 60)}h OT` : '';
+    const isSameSite = existingAttendance.site_id === siteId;
+    return {
+      units: u,
+      label,
+      siteName,
+      otText,
+      isSameSite,
+      date: String(existingAttendance.date).slice(0, 10),
+    };
+  }, [existingAttendance, data.sites, siteId]);
+
   const formattedDate = useMemo(() => {
     if (!date) return 'Select Date';
     try {
@@ -134,6 +184,36 @@ export function AttendanceModal({
     const parsedOtHours = parseInt(otHours, 10) || 0;
     const parsedOtMinutes = parsedOtHours * 60;
 
+    // Check if worker already has identical attendance saved on this site for this date
+    if (existingAttendance && existingAttendance.site_id === siteId) {
+      const existingUnits = Number(existingAttendance.units);
+      const existingOtMins = Number(existingAttendance.overtime_minutes || 0);
+      const currentUnits = units === '1' ? 1 : units === '0.5' ? 0.5 : 0;
+      const currentNotes = notes.trim();
+      const existingNotes = (existingAttendance.notes || '').trim();
+
+      if (
+        existingUnits === currentUnits &&
+        existingOtMins === parsedOtMinutes &&
+        existingNotes === currentNotes &&
+        !isCorrection
+      ) {
+        showToast('⚠️ Attendance is already marked for this worker today', 'w');
+        return;
+      }
+    }
+
+    // Check if worker is marked on a different site and total exceeds 1.5
+    if (existingAttendance && existingAttendance.site_id !== siteId) {
+      const existingUnits = Number(existingAttendance.units);
+      const currentUnits = units === '1' ? 1 : units === '0.5' ? 0.5 : 0;
+      if (existingUnits + currentUnits > 1.5) {
+        const otherSiteName = data.sites.find((s) => s.id === existingAttendance.site_id)?.name || 'another site';
+        showToast(`⚠️ This worker is already marked on ${otherSiteName} today`, 'w');
+        return;
+      }
+    }
+
     onSave({
       site_id: siteId,
       worker_id: workerId,
@@ -154,7 +234,7 @@ export function AttendanceModal({
       >
         {/* 1. STANDARD PAGE TOP NAVBAR */}
         <TopNavBar
-          title={isCorrection ? 'Update Attendance' : 'Mark Attendance'}
+          title={isCorrection || existingAttendance ? 'Update Attendance' : 'Mark Attendance'}
           onBack={() => !busy && onClose()}
         />
 
@@ -341,11 +421,6 @@ export function AttendanceModal({
                 <AppIcon name="time-outline" size={16} color="#D97706" />
                 <Text style={styles.cardTitle}>Overtime (Hours)</Text>
               </View>
-              {parseInt(otHours, 10) > 0 ? (
-                <View style={styles.otActiveBadge}>
-                  <Text style={styles.otActiveBadgeText}>+{otHours}h OT</Text>
-                </View>
-              ) : null}
             </View>
 
             <View style={styles.otInputRow}>
@@ -358,40 +433,6 @@ export function AttendanceModal({
                 style={styles.otInput}
               />
               <Text style={styles.otUnitText}>Hours</Text>
-            </View>
-
-            {/* Quick Presets: +1h, +2h, +3h, +4h, +5h */}
-            <View style={styles.otPresetsRow}>
-              {['1', '2', '3', '4', '5'].map((h) => {
-                const isActive = otHours === h;
-                return (
-                  <Pressable
-                    key={h}
-                    onPress={() => setOtHours((prev) => (prev === h ? '' : h))}
-                    style={[
-                      styles.otPresetChip,
-                      isActive && styles.otPresetChipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.otPresetChipText,
-                        isActive && styles.otPresetChipTextActive,
-                      ]}
-                    >
-                      +{h}h
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              {parseInt(otHours, 10) > 0 ? (
-                <Pressable
-                  onPress={() => setOtHours('')}
-                  style={styles.otClearChip}
-                >
-                  <Text style={styles.otClearChipText}>Clear</Text>
-                </Pressable>
-              ) : null}
             </View>
           </View>
 
@@ -438,7 +479,9 @@ export function AttendanceModal({
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={styles.saveBtnText}>
-                  {isCorrection ? 'Update Attendance' : 'Save Attendance'}
+                  {isCorrection || existingAttendance
+                    ? 'Update Attendance'
+                    : 'Save Attendance'}
                 </Text>
               )}
             </Pressable>
@@ -912,19 +955,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  otActiveBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  otActiveBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#B45309',
-  },
   otInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -947,49 +977,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
   },
-  otPresetsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
-  },
-  otPresetChip: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 7,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
-  },
-  otPresetChipActive: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#F59E0B',
-  },
-  otPresetChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  otPresetChipTextActive: {
-    color: '#92400E',
-    fontWeight: '800',
-  },
-  otClearChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
-  },
-  otClearChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
   hiddenPicker: {
     position: 'absolute',
     top: 0,
@@ -1000,5 +987,40 @@ const styles = StyleSheet.create({
     height: '100%',
     opacity: 0,
     ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+  },
+  alreadyMarkedBanner: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    gap: 4,
+  },
+  alreadyMarkedBannerOtherSite: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  alreadyMarkedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  alreadyMarkedTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  alreadyMarkedTitleOtherSite: {
+    color: '#B91C1C',
+  },
+  alreadyMarkedDesc: {
+    fontSize: 12.5,
+    color: '#B45309',
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  alreadyMarkedDescOtherSite: {
+    color: '#991B1B',
   },
 });

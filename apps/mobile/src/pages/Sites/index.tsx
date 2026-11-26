@@ -8,6 +8,7 @@ import {
   RefreshControl,
   useWindowDimensions,
   Platform,
+  Linking,
 } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { AppIcon } from '../../components/icons/AppIcon';
@@ -188,156 +189,136 @@ export function SitesPage({
           }
         >
           <View style={styles.container}>
-            {/* Executive Site Overview Card */}
+            {/* Executive Site Overview Card (Option 2: Executive Matrix Style) */}
             <View style={styles.siteHeaderCard}>
-              {/* Primary Header: Avatar + Title & Meta + Edit Button */}
-              <View style={styles.headerPrimaryRow}>
-                <View
-                  style={[
-                    styles.siteAvatar,
-                    { backgroundColor: statusTheme.bg, borderColor: statusTheme.badgeBg },
-                  ]}
-                >
-                  <AppIcon
-                    name={site.work_type === 'LABOUR' ? 'hammer' : 'business'}
-                    size={20}
-                    color={statusTheme.color}
-                  />
+              {/* Header Top Row: Title on Left, Status Badge + Edit on Right */}
+              <View style={styles.headerTopRow}>
+                <View style={styles.headerTitleCol}>
+                  <Text style={styles.headerSiteName} numberOfLines={1}>
+                    {site.name}
+                  </Text>
+
+                  {/* Clean Subtitle: Location & Optional Business */}
+                  {(site.address || businessName) ? (
+                    <View style={styles.headerSubtitleRow}>
+                      <AppIcon name="location-outline" size={13} color="#64748B" />
+                      <Text style={styles.headerLocationText} numberOfLines={1}>
+                        {site.address}{state ? `, ${state}` : ''}
+                        {businessName ? ` • ${businessName}` : ''}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
-                <View style={styles.headerMainCol}>
-                  {/* Title & Status + Edit Row */}
-                  <View style={styles.siteTitleRow}>
-                    <Text style={styles.siteTitle} numberOfLines={1}>
-                      {site.name}
+                <View style={styles.headerRightActions}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {
+                        backgroundColor: statusTheme.badgeBg,
+                        borderColor: statusTheme.badgeBg,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: statusTheme.color },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        { color: statusTheme.color },
+                      ]}
+                    >
+                      {statusBadgeLabel}
                     </Text>
-
-                    <View style={styles.headerRightGroup}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          {
-                            backgroundColor: statusTheme.badgeBg,
-                            borderColor: statusTheme.badgeBg,
-                          },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.statusDot,
-                            { backgroundColor: statusTheme.color },
-                          ]}
-                        />
-                        <Text
-                          style={[
-                            styles.statusBadgeText,
-                            { color: statusTheme.color },
-                          ]}
-                        >
-                          {statusBadgeLabel}
-                        </Text>
-                      </View>
-
-                      <Pressable
-                        onPress={() => onEditSite(site)}
-                        style={({ pressed }) => [
-                          styles.editSiteBtn,
-                          pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
-                        ]}
-                        accessibilityLabel="Edit site details"
-                      >
-                        <AppIcon name="create-outline" size={14} color="#334155" />
-                      </Pressable>
-                    </View>
                   </View>
 
-                  {/* Clean Client, Location & Phone Row */}
-                  <View style={styles.headerMetaRow}>
-                    {site.owner_name ? (
-                      <View style={styles.clientInlineGroup}>
-                        <AppIcon name="person" size={12} color="#64748B" />
-                        <Text style={styles.clientInlineName}>{site.owner_name}</Text>
-                      </View>
-                    ) : null}
-
-                    {site.phone ? (
-                      <>
-                        <Text style={styles.metaDotDivider}>•</Text>
-                        <View style={styles.phoneInlineGroup}>
-                          <AppIcon name="call" size={12} color="#16A34A" />
-                          <Text style={styles.phoneInlineText}>{site.phone}</Text>
-                        </View>
-                      </>
-                    ) : null}
-
-                    {site.address ? (
-                      <>
-                        <Text style={styles.metaDotDivider}>•</Text>
-                        <View style={styles.clientInlineGroup}>
-                          <AppIcon name="location-outline" size={12} color="#D97706" />
-                          <Text style={styles.clientInlineName} numberOfLines={1}>
-                            {site.address}{state ? `, ${state}` : ''}
-                          </Text>
-                        </View>
-                      </>
-                    ) : null}
-
-                    {businessName ? (
-                      <>
-                        <Text style={styles.metaDotDivider}>•</Text>
-                        <Text style={styles.businessInlineText}>
-                          {businessName}
-                        </Text>
-                      </>
-                    ) : null}
-                  </View>
+                  <Pressable
+                    onPress={() => onEditSite(site)}
+                    style={({ pressed }) => [
+                      styles.editSiteBtn,
+                      pressed && { opacity: 0.7, transform: [{ scale: 0.94 }] },
+                    ]}
+                    accessibilityLabel="Edit site details"
+                  >
+                    <AppIcon name="create-outline" size={14} color="#334155" />
+                  </Pressable>
                 </View>
               </View>
 
               {/* Clean hairline separator */}
-              <View style={styles.cardDivider} />
+              <View style={styles.headerDivider} />
 
-              {/* Key Project Specs Chips */}
-              <View style={styles.specsChipsContainer}>
-                {/* Scope & Rate */}
-                <View style={styles.specChip}>
-                  <AppIcon
-                    name={site.work_type === 'LABOUR' ? 'people-outline' : 'construct-outline'}
-                    size={13}
-                    color="#2563EB"
-                  />
-                  <Text style={styles.specChipText}>
-                    {site.work_type === 'LABOUR' ? t('labourOnly', 'Labour Only') : t('labourMaterial', 'Labour + Material')}
-                    {' • '}
+              {/* Structured Key-Value Matrix */}
+              <View style={styles.matrixGrid}>
+                {/* 1. Client / Party */}
+                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
+                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'मालिक' : 'CLIENT'}</Text>
+                  <Text style={styles.matrixValue} numberOfLines={1}>
+                    {site.owner_name || '—'}
+                  </Text>
+                </View>
+
+                {/* 2. Phone */}
+                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
+                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'फोन' : 'PHONE'}</Text>
+                  {site.phone ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${site.phone}`)}
+                      style={({ pressed }) => [
+                        styles.matrixPhonePressable,
+                        pressed && { opacity: 0.7 },
+                      ]}
+                      accessibilityLabel={`Call ${site.phone}`}
+                    >
+                      <AppIcon name="call" size={12} color="#16A34A" />
+                      <Text style={styles.matrixPhoneValue} numberOfLines={1}>
+                        {site.phone}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.matrixValueMuted}>—</Text>
+                  )}
+                </View>
+
+                {/* 3. Contract Type */}
+                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
+                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'ठेका' : 'CONTRACT'}</Text>
+                  <Text style={styles.matrixValue} numberOfLines={1}>
+                    {site.work_type === 'LABOUR'
+                      ? t('labourOnly', 'Labour Only')
+                      : t('labourMaterial', 'Labour + Material')}
+                    {' · '}
                     {site.pricing === 'FIXED'
-                      ? t('fixedLumpsum', 'Fixed Lumpsum')
+                      ? t('fixedLumpsum', 'Fixed')
                       : site.pricing === 'UNIT'
                         ? t('unitRate', 'Unit Rate')
                         : t('daily', 'Daily')}
                   </Text>
                 </View>
 
-                {/* Timeline */}
-                {(site.start_date || site.end_date) ? (
-                  <View style={styles.specChip}>
-                    <AppIcon name="calendar-outline" size={13} color="#059669" />
-                    <Text style={styles.specChipText}>
-                      {site.start_date}{site.end_date ? ` → ${site.end_date}` : ` (${statusBadgeLabel})`}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* GST Verification Banner */}
-                {gstin ? (
-                  <View style={[styles.specChip, styles.specChipGst]}>
-                    <AppIcon name="shield-checkmark-outline" size={13} color="#16A34A" />
-                    <Text style={styles.specChipGstText}>
-                      GSTIN: <Text style={styles.gstCodeText}>{gstin}</Text>
-                      {state ? ` • ${state}${stateCode ? ` (${stateCode})` : ''}` : ''}
-                    </Text>
-                  </View>
-                ) : null}
+                {/* 4. Started / Timeline */}
+                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
+                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'शुरू' : 'STARTED'}</Text>
+                  <Text style={styles.matrixValue} numberOfLines={1}>
+                    {site.start_date || '—'}
+                    {site.end_date ? ` → ${site.end_date}` : ''}
+                  </Text>
+                </View>
               </View>
+
+              {/* GST Verification Banner (if present) */}
+              {gstin ? (
+                <View style={styles.gstMatrixRow}>
+                  <AppIcon name="shield-checkmark" size={13} color="#16A34A" />
+                  <Text style={styles.gstMatrixLabel}>GSTIN:</Text>
+                  <Text style={styles.gstMatrixCode}>{gstin}</Text>
+                  {state ? <Text style={styles.gstMatrixState}>({state}{stateCode ? ` - ${stateCode}` : ''})</Text> : null}
+                </View>
+              ) : null}
 
               {/* Contract Terms & Notes Section */}
               {userNotes ? (
@@ -546,12 +527,11 @@ export function SitesPage({
                         })}
                         style={({ pressed }) => [
                           styles.docItemActionViewBtn,
-                          pressed && { opacity: 0.75, transform: [{ scale: 0.96 }] },
+                          pressed && { opacity: 0.75, transform: [{ scale: 0.94 }] },
                         ]}
                         accessibilityLabel={`View ${d.name}`}
                       >
-                        <AppIcon name="eye-outline" size={14} color="#7C3AED" />
-                        <Text style={styles.docItemActionViewBtnText}>View</Text>
+                        <AppIcon name="eye-outline" size={16} color="#1D4ED8" />
                       </Pressable>
                     </View>
                   ))}
@@ -565,23 +545,92 @@ export function SitesPage({
 
             {/* Cost & Cash Breakdown */}
             <Card style={styles.breakdownCard}>
-              <Text style={styles.cardHeaderTitle}>Cost & Cash Breakdown</Text>
-              <View style={styles.breakdownGrid}>
-                {[
-                  ['Labour Earned (Wages)', f.labour],
-                  ['Labour Paid (Cash)', f.wagesPaid],
-                  ['Material Cost', f.material],
-                  ['Other Site Expense', f.expenses],
-                  ['Supplier Bills Paid', f.suppliersPaid],
-                  ['Supplier Dues Pending', f.supplierBalance],
-                  ['Estimated Remaining Cost', f.remaining],
-                  ['Net Cash In Hand (This Site)', f.cash],
-                ].map(([label, v]) => (
-                  <View key={label as string} style={styles.breakdownItem}>
-                    <Text style={styles.breakdownLabel}>{label as string}</Text>
-                    <Text style={styles.breakdownValue}>{money(v as number)}</Text>
+              <View style={styles.breakdownHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <AppIcon name="calculator-outline" size={17} color="#2563EB" />
+                  <Text style={styles.cardHeaderTitle}>
+                    {lang === 'hi' ? 'लागत और नकदी विवरण (Cost & Cash)' : 'Cost & Cash Breakdown'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 1. COSTS INCURRED (LAGAAT) */}
+              <View style={[styles.breakdownSection, { borderTopWidth: 0, marginTop: 0, paddingTop: 0 }]}>
+                <Text style={styles.breakdownSectionTitle}>
+                  {lang === 'hi' ? '1. साइट लागत (Costs Incurred)' : '1. Costs Incurred (Lagaat)'}
+                </Text>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मजदूरी बनी (Labour Earned)' : 'Labour Earned (Wages)'}</Text>
+                  <Text style={styles.breakdownValue}>{money(f.labour)}</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मटेरियल लागत (Material Cost)' : 'Material Cost'}</Text>
+                  <Text style={styles.breakdownValue}>{money(f.material)}</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'अन्य खर्चे (Other Site Expense)' : 'Other Site Expense'}</Text>
+                  <Text style={styles.breakdownValue}>{money(f.expenses)}</Text>
+                </View>
+                <View style={[styles.breakdownItem, styles.breakdownItemTotal]}>
+                  <Text style={styles.breakdownLabelTotal}>{lang === 'hi' ? 'कुल लागत (Total Cost So Far)' : 'Total Cost Incurred'}</Text>
+                  <Text style={styles.breakdownValueTotal}>{money(f.cost)}</Text>
+                </View>
+                {f.remaining > 0 ? (
+                  <View style={styles.breakdownItem}>
+                    <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'अनुमानित बचा खर्च' : 'Estimated Remaining Cost'}</Text>
+                    <Text style={styles.breakdownValue}>{money(f.remaining)}</Text>
                   </View>
-                ))}
+                ) : null}
+              </View>
+
+              {/* 2. OUTSTANDING DUES (DENARI) */}
+              <View style={styles.breakdownSection}>
+                <Text style={styles.breakdownSectionTitle}>
+                  {lang === 'hi' ? '2. बाकी देनदारी (Outstanding Dues)' : '2. Outstanding Dues (Denari)'}
+                </Text>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'बाकी मजदूरी (Labour Dues Pending)' : 'Labour Dues Pending'}</Text>
+                  <Text style={[styles.breakdownValue, f.labourBalance > 0 && { color: '#D97706' }]}>
+                    {money(f.labourBalance)}
+                  </Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'बाकी सप्लायर बिल (Supplier Dues Pending)' : 'Supplier Dues Pending'}</Text>
+                  <Text style={[styles.breakdownValue, f.supplierBalance > 0 && { color: '#D97706' }]}>
+                    {money(f.supplierBalance)}
+                  </Text>
+                </View>
+                <View style={[styles.breakdownItem, styles.breakdownItemHighlight]}>
+                  <Text style={styles.breakdownLabelHighlight}>{lang === 'hi' ? 'कुल बाकी देनदारी (Total Dues)' : 'Total Dues Pending'}</Text>
+                  <Text style={styles.breakdownValueHighlight}>
+                    {money(f.labourBalance + f.supplierBalance)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 3. CASH FLOW & NET CASH */}
+              <View style={styles.breakdownSection}>
+                <Text style={styles.breakdownSectionTitle}>
+                  {lang === 'hi' ? '3. नकदी प्रवाह (Cash Movement)' : '3. Cash Movement (In vs Out)'}
+                </Text>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मालिक से मिला (Client Received)' : 'Client Received (Cash In)'}</Text>
+                  <Text style={[styles.breakdownValue, { color: '#16A34A' }]}>{money(f.received)}</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मजदूरी दी (Labour Paid)' : 'Labour Wages Paid'}</Text>
+                  <Text style={styles.breakdownValue}>{money(f.wagesPaid)}</Text>
+                </View>
+                <View style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'सप्लायर को चुकाया (Bills Paid)' : 'Supplier Bills Paid'}</Text>
+                  <Text style={styles.breakdownValue}>{money(f.suppliersPaid)}</Text>
+                </View>
+                <View style={[styles.breakdownItem, styles.breakdownItemCash]}>
+                  <Text style={styles.breakdownLabelCash}>{lang === 'hi' ? 'साइट का शुद्ध कैश (Net Cash in Hand)' : 'Net Cash In Hand (This Site)'}</Text>
+                  <Text style={[styles.breakdownValueCash, { color: f.cash >= 0 ? '#16A34A' : '#DC2626' }]}>
+                    {money(f.cash)}
+                  </Text>
+                </View>
               </View>
             </Card>
 
@@ -1447,7 +1496,7 @@ const styles = StyleSheet.create({
   siteHeaderCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 14,
+    padding: 15,
     gap: 12,
     marginBottom: 14,
     borderWidth: 1,
@@ -1458,44 +1507,45 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  headerPrimaryRow: {
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 10,
   },
-  siteAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  headerMainCol: {
+  headerTitleCol: {
     flex: 1,
     gap: 4,
   },
-  siteTitle: {
-    fontSize: 17,
+  headerSiteName: {
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+  },
+  headerSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerLocationText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#64748B',
     flexShrink: 1,
   },
-  headerRightGroup: {
+  headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingTop: 1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
     borderRadius: 6,
     borderWidth: 1,
   },
@@ -1516,9 +1566,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusDotOngoing: {
     backgroundColor: '#16A34A',
@@ -1553,79 +1603,77 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#334155',
   },
-  headerMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
+  headerDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
   },
-  clientInlineGroup: {
+  matrixGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  matrixCell: {
+    width: '47%',
+    gap: 3,
+  },
+  matrixCellDesktop: {
+    width: '22.5%',
+  },
+  matrixLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  matrixValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  matrixValueMuted: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  matrixPhonePressable: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  clientInlineName: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  businessInlineText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#475569',
-  },
-  phoneInlineGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  phoneInlineText: {
-    fontSize: 12,
-    fontWeight: '600',
+  matrixPhoneValue: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#16A34A',
   },
-  metaDotDivider: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  specsChipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  specChip: {
+  gstMatrixRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  specChipText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  specChipGst: {
+    gap: 6,
     backgroundColor: '#F0FDF4',
+    borderWidth: 1,
     borderColor: '#DCFCE7',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  specChipGstText: {
-    fontSize: 11.5,
+  gstMatrixLabel: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#166534',
-    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
-  gstCodeText: {
-    fontFamily: 'monospace',
+  gstMatrixCode: {
+    fontSize: 12,
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
     fontWeight: '700',
     color: '#14532D',
+  },
+  gstMatrixState: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#15803D',
   },
   termsBox: {
     backgroundColor: '#F8FAFC',
@@ -1749,11 +1797,27 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  breakdownHeaderRow: {
+    marginBottom: 6,
+  },
   cardHeaderTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: Colors.textPrimary,
-    marginBottom: 12,
+  },
+  breakdownSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  breakdownSectionTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   breakdownGrid: {
     gap: 8,
@@ -1762,18 +1826,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceSubtle,
+    borderBottomColor: '#F8FAFC',
   },
   breakdownLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+    fontSize: 12.5,
+    color: '#475569',
+    fontWeight: '500',
   },
   breakdownValue: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.textPrimary,
+  },
+  breakdownItemTotal: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  breakdownLabelTotal: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  breakdownValueTotal: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  breakdownItemHighlight: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  breakdownLabelHighlight: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  breakdownValueHighlight: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  breakdownItemCash: {
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  breakdownLabelCash: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  breakdownValueCash: {
+    fontSize: 14,
+    fontWeight: '900',
   },
   actionsWrapDesktop: {
     flexDirection: 'row',
@@ -1908,21 +2026,15 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   docItemActionViewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    width: 32,
+    height: 32,
     borderRadius: 8,
-    backgroundColor: '#F5F3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: '#BFDBFE',
     marginLeft: 6,
-  },
-  docItemActionViewBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#7C3AED',
   },
 });
 

@@ -92,7 +92,7 @@ export function ReceivePaymentPage({
       site_id: formSiteId,
       date: formDate,
       party: formParty.trim() || (selectedSite?.client_name || ''),
-      amount: String(Math.round(Number(formAmount) * 100)),
+      amount: formAmount.trim(),
       description: descParts.join(' • '),
     });
 

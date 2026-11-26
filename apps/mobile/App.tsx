@@ -44,6 +44,7 @@ import {
   ReceivePaymentPage,
   ExpenseBillPage,
   ExtraWorkPage,
+  PayBillPage,
 } from './src/pages/Entries';
 
 // API & Helpers
@@ -86,6 +87,9 @@ function MainApp() {
       }
       if (path === '/entry/extra') {
         return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'EXTRA' };
+      }
+      if (path === '/entry/pay-bill' || path === '/entry/supplier-payment') {
+        return { tab: 'ledger', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'SUPPLIER_PAYMENT' };
       }
       if (path === '/attendance/daily' || path === '/daily-attendance' || path === '/haziri') {
         return { tab: 'home', selectedSiteId: null, selectedWorkerId: null, isNewSite: false, activeEntryKind: 'BULK_ATTENDANCE' };
@@ -691,6 +695,8 @@ function MainApp() {
                       ? '/entry/expense'
                       : entryKind === 'EXTRA'
                         ? '/entry/extra'
+                        : entryKind === 'SUPPLIER_PAYMENT'
+                          ? '/entry/pay-bill'
                         : entryKind === 'BULK_ATTENDANCE'
                           ? '/attendance/daily'
                           : newTab === 'home'
@@ -727,16 +733,19 @@ function MainApp() {
   const handleBackFromEntry = useCallback(() => {
     const sId = activeEntryParams?.siteId;
     const wId = activeEntryParams?.workerId;
+    const isSupplierPayment = activeEntryKind === 'SUPPLIER_PAYMENT';
     setActiveEntryKind(null);
     setActiveEntryParams(null);
-    if (sId) {
+    if (isSupplierPayment) {
+      navigate('ledger', '/ledger', null, false, null, null);
+    } else if (sId) {
       navigate('sites', `/sites/${sId}`, sId, false);
     } else if (wId) {
       navigate('team', `/team/${wId}`, null, false, wId);
     } else {
       navigate('home', '/', null, false, null, null);
     }
-  }, [activeEntryParams]);
+  }, [activeEntryParams, activeEntryKind]);
 
   // Handle hardware / Android system back button gracefully
   useEffect(() => {
@@ -915,6 +924,12 @@ function MainApp() {
           setSelectedSiteId(null);
           setSelectedWorkerId(null);
           setActiveEntryKind('EXTRA');
+        } else if (path === '/entry/pay-bill' || path === '/entry/supplier-payment') {
+          setTab('ledger');
+          setIsNewSite(false);
+          setSelectedSiteId(null);
+          setSelectedWorkerId(null);
+          setActiveEntryKind('SUPPLIER_PAYMENT');
         } else if (path.startsWith('/sites/') && path.length > 7) {
           setTab('sites');
           setIsNewSite(false);
@@ -1179,8 +1194,9 @@ function MainApp() {
     else if (kind === 'RECEIPT') url = '/entry/receipt';
     else if (kind === 'EXPENSE') url = '/entry/expense';
     else if (kind === 'EXTRA') url = '/entry/extra';
+    else if (kind === 'SUPPLIER_PAYMENT') url = '/entry/pay-bill';
 
-    navigate('home', url, null, false, null, kind);
+    navigate(kind === 'SUPPLIER_PAYMENT' ? 'ledger' : 'home', url, null, false, null, kind);
   };
 
   async function handleSaveEntry(
@@ -1203,13 +1219,18 @@ function MainApp() {
     };
 
     // 1. Instant optimistic entry creation & immediate navigation (0ms wait!)
+    const isSupplierPayment = kind === 'SUPPLIER_PAYMENT';
     mutationSeqRef.current += 1;
     const mySeq = mutationSeqRef.current;
     setError('');
     pendingRef.current = null;
     setActiveEntryKind(null);
     setActiveEntryParams(null);
-    navigate('home', '/', null, false, null, null);
+    if (isSupplierPayment) {
+      navigate('ledger', '/ledger', null, false, null, null);
+    } else {
+      navigate('home', '/', null, false, null, null);
+    }
     showToast(lang === 'hi' ? 'सफलतापूर्वक सुरक्षित हो गया' : 'Saved successfully', 's');
 
     setData((prev) => {
@@ -1702,6 +1723,27 @@ function MainApp() {
               onBack={handleBackFromEntry}
               onSave={(vals) =>
                 handleSaveEntry('EXTRA', vals, activeEntryParams?.siteId)
+              }
+              onRefresh={() => refresh()}
+              refreshing={refreshing}
+              onOpenProfile={() => handleNavigate('profile')}
+            />
+          ) : activeEntryKind === 'SUPPLIER_PAYMENT' && data ? (
+            <PayBillPage
+              data={data}
+              busy={busy}
+              error={error}
+              siteId={activeEntryParams?.siteId}
+              bill={activeEntryParams?.bill}
+              onBack={handleBackFromEntry}
+              onSave={(vals) =>
+                handleSaveEntry(
+                  'SUPPLIER_PAYMENT',
+                  vals,
+                  activeEntryParams?.siteId,
+                  undefined,
+                  activeEntryParams?.bill
+                )
               }
               onRefresh={() => refresh()}
               refreshing={refreshing}

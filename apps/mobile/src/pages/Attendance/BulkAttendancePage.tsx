@@ -131,6 +131,35 @@ export function BulkAttendancePage({
     return new Set(Object.keys(savedStatusByWorker));
   }, [savedStatusByWorker]);
 
+  // Map of worker IDs already marked on ANOTHER site on the selected date
+  const otherSiteAttendanceByWorker = useMemo(() => {
+    const map: Record<string, { siteName: string; units: number; siteId: string }> = {};
+    (data.attendance || []).forEach((a) => {
+      if (
+        a.site_id !== selectedSiteId &&
+        String(a.date).slice(0, 10) === selectedDate
+      ) {
+        const siteObj = data.sites.find((s) => s.id === a.site_id);
+        map[a.worker_id] = {
+          siteName: siteObj?.name || 'दूसरी साइट',
+          units: Number(a.units || 0),
+          siteId: a.site_id,
+        };
+      }
+    });
+    return map;
+  }, [data.attendance, selectedSiteId, selectedDate, data.sites]);
+
+  const otherSiteWorkerNames = useMemo(() => {
+    return activeWorkers
+      .filter((w) => otherSiteAttendanceByWorker[w.id])
+      .map((w) => w.name);
+  }, [activeWorkers, otherSiteAttendanceByWorker]);
+
+  const alreadyMarkedCountOnThisSite = useMemo(() => {
+    return activeWorkers.filter((w) => markedWorkerIdSet.has(w.id)).length;
+  }, [activeWorkers, markedWorkerIdSet]);
+
   // Reset filter to ALL when site or date changes
   useEffect(() => {
     setActiveFilter('ALL');
@@ -297,6 +326,38 @@ export function BulkAttendancePage({
       return;
     }
 
+    // 1. Validation: prevent marking attendance that would exceed 1.5 units across sites on the same date
+    for (const worker of targets) {
+      const otherInfo = otherSiteAttendanceByWorker[worker.id];
+      const status = workerStatus[worker.id] || 'PRESENT';
+      const units = status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0;
+      if (otherInfo && otherInfo.units + units > 1.5) {
+        showToast(
+          `⚠️ ${worker.name} is already marked on ${otherInfo.siteName} today`,
+          'w'
+        );
+        return;
+      }
+    }
+
+    // 2. Check if all selected workers already have the exact same attendance marked on this site
+    const allAlreadyMarkedSame = targets.every((worker) => {
+      const savedStatus = savedStatusByWorker[worker.id];
+      const currentStatus = workerStatus[worker.id] || 'PRESENT';
+      return Boolean(savedStatus && savedStatus === currentStatus);
+    });
+
+    if (allAlreadyMarkedSame) {
+      const count = targets.length;
+      showToast(
+        count === 1
+          ? `⚠️ ${targets[0].name}'s attendance is already marked for today`
+          : `⚠️ Attendance is already marked for selected workers today`,
+        'w'
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
       const items = targets.map((worker) => {
@@ -399,7 +460,7 @@ export function BulkAttendancePage({
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>Bulk Attendance</Text>
           <Text style={styles.headerSubtitle}>
-            {currentSite?.name ? `${currentSite.name} • ` : ''}Mark attendance for all workers
+            Mark attendance for all workers
           </Text>
         </View>
 
@@ -446,7 +507,7 @@ export function BulkAttendancePage({
           <Ionicons name="chevron-down" size={16} color="#64748B" />
         </Pressable>
 
-        {/* FILTER TABS ROW (4 Clean Tabs) */}
+        {/* FILTER TABS ROW (4 Clean Tabs - Numbers removed as per request) */}
         <View style={styles.filterTabsWrapper}>
           <ScrollView
             horizontal
@@ -467,7 +528,7 @@ export function BulkAttendancePage({
                   activeFilter === 'ALL' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
                 ]}
               >
-                All ({allCount})
+                All
               </Text>
             </Pressable>
 
@@ -485,7 +546,7 @@ export function BulkAttendancePage({
                   activeFilter === 'PRESENT' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
                 ]}
               >
-                Present ({presentCount})
+                Present
               </Text>
             </Pressable>
 
@@ -503,7 +564,7 @@ export function BulkAttendancePage({
                   activeFilter === 'HALF_DAY' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
                 ]}
               >
-                Half Day ({halfDayCount})
+                Half Day
               </Text>
             </Pressable>
 
@@ -521,7 +582,7 @@ export function BulkAttendancePage({
                   activeFilter === 'ABSENT' ? styles.filterTabLabelActive : styles.filterTabLabelInactive,
                 ]}
               >
-                Absent ({absentCount})
+                Absent
               </Text>
             </Pressable>
           </ScrollView>
@@ -545,12 +606,20 @@ export function BulkAttendancePage({
                   <Ionicons name="checkmark" size={15} color="#FFFFFF" />
                 )}
               </View>
-              <Text style={styles.selectAllText}>
-                {selectedDisplayedWorkers.length > 0 && !isAllDisplayedSelected
-                  ? `Select All (${selectedDisplayedWorkers.length}/${displayedWorkers.length} selected)`
-                  : `Select All (${displayedWorkers.length})`}
-              </Text>
+              <Text style={styles.selectAllText}>Select All</Text>
             </Pressable>
+
+            {selectedDisplayedWorkers.length > 0 ? (
+              <View style={styles.selectedCountBadge}>
+                <Text style={styles.selectedCountBadgeText}>
+                  {selectedDisplayedWorkers.length} of {displayedWorkers.length} Selected
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.selectedCountMutedText}>
+                0 of {displayedWorkers.length} Selected
+              </Text>
+            )}
           </View>
         )}
 
@@ -697,11 +766,7 @@ export function BulkAttendancePage({
               {isSaving ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.primaryCtaText}>
-                  {selectedDisplayedWorkers.length > 0
-                    ? `Save Attendance (${selectedDisplayedWorkers.length})`
-                    : 'Save Attendance'}
-                </Text>
+                <Text style={styles.primaryCtaText}>Save Attendance</Text>
               )}
             </Pressable>
           </View>
@@ -862,10 +927,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkboxSquare: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
     borderColor: '#2563EB',
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
@@ -876,14 +941,27 @@ const styles = StyleSheet.create({
     borderColor: '#2563EB',
   },
   selectAllText: {
-    marginLeft: 10,
-    fontSize: 14,
+    marginLeft: 8,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
   selectedCountBadge: {
-    fontSize: 12,
-    color: '#64748B',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  selectedCountBadgeText: {
+    fontSize: 11,
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+  selectedCountMutedText: {
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '600',
   },
 
@@ -961,6 +1039,57 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
+  },
+  otherSiteBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  otherSiteBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  bulkNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  bulkNoticeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E40AF',
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  bulkWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 6,
+  },
+  bulkWarningBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '600',
+    lineHeight: 16,
   },
   workerSubRow: {
     flexDirection: 'row',
