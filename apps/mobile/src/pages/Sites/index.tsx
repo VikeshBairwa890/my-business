@@ -78,6 +78,28 @@ function getSiteStatusTheme(status: string) {
   }
 }
 
+function formatHumanDate(d?: string | null): string {
+  if (!d) return '—';
+  try {
+    const parts = String(d).slice(0, 10).split('-');
+    if (parts.length === 3) {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      const day = parseInt(parts[2], 10);
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const year = parts[0];
+      if (!isNaN(day) && monthIdx >= 0 && monthIdx < 12) {
+        return `${day} ${months[monthIdx]} ${year}`;
+      }
+    }
+    return String(d);
+  } catch {
+    return String(d);
+  }
+}
+
 export function SitesPage({
   data,
   selectedSiteId,
@@ -252,73 +274,86 @@ export function SitesPage({
               {/* Clean hairline separator */}
               <View style={styles.headerDivider} />
 
-              {/* Structured Key-Value Matrix */}
-              <View style={styles.matrixGrid}>
-                {/* 1. Client / Party */}
-                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
-                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'मालिक' : 'CLIENT'}</Text>
-                  <Text style={styles.matrixValue} numberOfLines={1}>
+              {/* Row-by-Row Specs Ledger */}
+              <View style={styles.specsLedgerList}>
+                {/* Row 1: Client */}
+                <View style={styles.specsLedgerRow}>
+                  <View style={styles.specsLedgerLabelCol}>
+                    <AppIcon name="person-outline" size={14} color="#334155" />
+                    <Text style={styles.specsLedgerLabelText}>Client</Text>
+                  </View>
+                  <Text style={styles.specsLedgerValueText} numberOfLines={1}>
                     {site.owner_name || '—'}
                   </Text>
                 </View>
 
-                {/* 2. Phone */}
-                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
-                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'फोन' : 'PHONE'}</Text>
+                {/* Row 2: Phone */}
+                <View style={styles.specsLedgerRow}>
+                  <View style={styles.specsLedgerLabelCol}>
+                    <AppIcon name="call-outline" size={14} color="#334155" />
+                    <Text style={styles.specsLedgerLabelText}>Phone</Text>
+                  </View>
                   {site.phone ? (
                     <Pressable
                       onPress={() => Linking.openURL(`tel:${site.phone}`)}
                       style={({ pressed }) => [
-                        styles.matrixPhonePressable,
                         pressed && { opacity: 0.7 },
                       ]}
                       accessibilityLabel={`Call ${site.phone}`}
                     >
-                      <AppIcon name="call" size={12} color="#16A34A" />
-                      <Text style={styles.matrixPhoneValue} numberOfLines={1}>
+                      <Text style={styles.specsLedgerPhoneText}>
                         {site.phone}
                       </Text>
                     </Pressable>
                   ) : (
-                    <Text style={styles.matrixValueMuted}>—</Text>
+                    <Text style={styles.specsLedgerValueText}>—</Text>
                   )}
                 </View>
 
-                {/* 3. Contract Type */}
-                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
-                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'ठेका' : 'CONTRACT'}</Text>
-                  <Text style={styles.matrixValue} numberOfLines={1}>
+                {/* Row 3: Contract */}
+                <View style={styles.specsLedgerRow}>
+                  <View style={styles.specsLedgerLabelCol}>
+                    <AppIcon name="document-text-outline" size={14} color="#334155" />
+                    <Text style={styles.specsLedgerLabelText}>Contract</Text>
+                  </View>
+                  <Text style={styles.specsLedgerValueText} numberOfLines={1}>
                     {site.work_type === 'LABOUR'
-                      ? t('labourOnly', 'Labour Only')
-                      : t('labourMaterial', 'Labour + Material')}
+                      ? 'Labour Only'
+                      : 'Labour + Material'}
                     {' · '}
                     {site.pricing === 'FIXED'
-                      ? t('fixedLumpsum', 'Fixed')
+                      ? 'Fixed Lumpsum'
                       : site.pricing === 'UNIT'
-                        ? t('unitRate', 'Unit Rate')
-                        : t('daily', 'Daily')}
+                        ? 'Unit Rate'
+                        : 'Daily'}
                   </Text>
                 </View>
 
-                {/* 4. Started / Timeline */}
-                <View style={[styles.matrixCell, isDesktop && styles.matrixCellDesktop]}>
-                  <Text style={styles.matrixLabel}>{lang === 'hi' ? 'शुरू' : 'STARTED'}</Text>
-                  <Text style={styles.matrixValue} numberOfLines={1}>
-                    {site.start_date || '—'}
-                    {site.end_date ? ` → ${site.end_date}` : ''}
+                {/* Row 4: Timeline */}
+                <View style={[styles.specsLedgerRow, !gstin && styles.specsLedgerRowLast]}>
+                  <View style={styles.specsLedgerLabelCol}>
+                    <AppIcon name="calendar-outline" size={14} color="#334155" />
+                    <Text style={styles.specsLedgerLabelText}>Started</Text>
+                  </View>
+                  <Text style={styles.specsLedgerValueText} numberOfLines={1}>
+                    {formatHumanDate(site.start_date)}
+                    {site.end_date ? ` → ${formatHumanDate(site.end_date)}` : ''}
                   </Text>
                 </View>
+
+                {/* Row 5: GSTIN (if present) */}
+                {gstin ? (
+                  <View style={[styles.specsLedgerRow, styles.specsLedgerRowLast]}>
+                    <View style={styles.specsLedgerLabelCol}>
+                      <AppIcon name="shield-checkmark-outline" size={14} color="#16A34A" />
+                      <Text style={styles.specsLedgerLabelText}>GSTIN</Text>
+                    </View>
+                    <Text style={styles.specsLedgerGstText} numberOfLines={1}>
+                      {gstin}{stateCode ? ` (${stateCode})` : ''}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-
-              {/* GST Verification Banner (if present) */}
-              {gstin ? (
-                <View style={styles.gstMatrixRow}>
-                  <AppIcon name="shield-checkmark" size={13} color="#16A34A" />
-                  <Text style={styles.gstMatrixLabel}>GSTIN:</Text>
-                  <Text style={styles.gstMatrixCode}>{gstin}</Text>
-                  {state ? <Text style={styles.gstMatrixState}>({state}{stateCode ? ` - ${stateCode}` : ''})</Text> : null}
-                </View>
-              ) : null}
 
               {/* Contract Terms & Notes Section */}
               {userNotes ? (
@@ -549,84 +584,84 @@ export function SitesPage({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <AppIcon name="calculator-outline" size={17} color="#2563EB" />
                   <Text style={styles.cardHeaderTitle}>
-                    {lang === 'hi' ? 'लागत और नकदी विवरण (Cost & Cash)' : 'Cost & Cash Breakdown'}
+                    Cost & Cash Breakdown
                   </Text>
                 </View>
               </View>
 
-              {/* 1. COSTS INCURRED (LAGAAT) */}
+              {/* 1. Costs Incurred */}
               <View style={[styles.breakdownSection, { borderTopWidth: 0, marginTop: 0, paddingTop: 0 }]}>
                 <Text style={styles.breakdownSectionTitle}>
-                  {lang === 'hi' ? '1. साइट लागत (Costs Incurred)' : '1. Costs Incurred (Lagaat)'}
+                  1. Costs Incurred
                 </Text>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मजदूरी बनी (Labour Earned)' : 'Labour Earned (Wages)'}</Text>
+                  <Text style={styles.breakdownLabel}>Labour Earned</Text>
                   <Text style={styles.breakdownValue}>{money(f.labour)}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मटेरियल लागत (Material Cost)' : 'Material Cost'}</Text>
+                  <Text style={styles.breakdownLabel}>Material Cost</Text>
                   <Text style={styles.breakdownValue}>{money(f.material)}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'अन्य खर्चे (Other Site Expense)' : 'Other Site Expense'}</Text>
+                  <Text style={styles.breakdownLabel}>Other Expenses</Text>
                   <Text style={styles.breakdownValue}>{money(f.expenses)}</Text>
                 </View>
                 <View style={[styles.breakdownItem, styles.breakdownItemTotal]}>
-                  <Text style={styles.breakdownLabelTotal}>{lang === 'hi' ? 'कुल लागत (Total Cost So Far)' : 'Total Cost Incurred'}</Text>
+                  <Text style={styles.breakdownLabelTotal}>Total Cost Incurred</Text>
                   <Text style={styles.breakdownValueTotal}>{money(f.cost)}</Text>
                 </View>
                 {f.remaining > 0 ? (
                   <View style={styles.breakdownItem}>
-                    <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'अनुमानित बचा खर्च' : 'Estimated Remaining Cost'}</Text>
+                    <Text style={styles.breakdownLabel}>Estimated Remaining Cost</Text>
                     <Text style={styles.breakdownValue}>{money(f.remaining)}</Text>
                   </View>
                 ) : null}
               </View>
 
-              {/* 2. OUTSTANDING DUES (DENARI) */}
+              {/* 2. Outstanding Dues */}
               <View style={styles.breakdownSection}>
                 <Text style={styles.breakdownSectionTitle}>
-                  {lang === 'hi' ? '2. बाकी देनदारी (Outstanding Dues)' : '2. Outstanding Dues (Denari)'}
+                  2. Outstanding Dues
                 </Text>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'बाकी मजदूरी (Labour Dues Pending)' : 'Labour Dues Pending'}</Text>
+                  <Text style={styles.breakdownLabel}>Labour Dues Pending</Text>
                   <Text style={[styles.breakdownValue, f.labourBalance > 0 && { color: '#D97706' }]}>
                     {money(f.labourBalance)}
                   </Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'बाकी सप्लायर बिल (Supplier Dues Pending)' : 'Supplier Dues Pending'}</Text>
+                  <Text style={styles.breakdownLabel}>Supplier Dues Pending</Text>
                   <Text style={[styles.breakdownValue, f.supplierBalance > 0 && { color: '#D97706' }]}>
                     {money(f.supplierBalance)}
                   </Text>
                 </View>
                 <View style={[styles.breakdownItem, styles.breakdownItemHighlight]}>
-                  <Text style={styles.breakdownLabelHighlight}>{lang === 'hi' ? 'कुल बाकी देनदारी (Total Dues)' : 'Total Dues Pending'}</Text>
+                  <Text style={styles.breakdownLabelHighlight}>Total Dues Pending</Text>
                   <Text style={styles.breakdownValueHighlight}>
                     {money(f.labourBalance + f.supplierBalance)}
                   </Text>
                 </View>
               </View>
 
-              {/* 3. CASH FLOW & NET CASH */}
+              {/* 3. Cash Movement */}
               <View style={styles.breakdownSection}>
                 <Text style={styles.breakdownSectionTitle}>
-                  {lang === 'hi' ? '3. नकदी प्रवाह (Cash Movement)' : '3. Cash Movement (In vs Out)'}
+                  3. Cash Movement
                 </Text>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मालिक से मिला (Client Received)' : 'Client Received (Cash In)'}</Text>
+                  <Text style={styles.breakdownLabel}>Client Received</Text>
                   <Text style={[styles.breakdownValue, { color: '#16A34A' }]}>{money(f.received)}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'मजदूरी दी (Labour Paid)' : 'Labour Wages Paid'}</Text>
+                  <Text style={styles.breakdownLabel}>Labour Wages Paid</Text>
                   <Text style={styles.breakdownValue}>{money(f.wagesPaid)}</Text>
                 </View>
                 <View style={styles.breakdownItem}>
-                  <Text style={styles.breakdownLabel}>{lang === 'hi' ? 'सप्लायर को चुकाया (Bills Paid)' : 'Supplier Bills Paid'}</Text>
+                  <Text style={styles.breakdownLabel}>Supplier Bills Paid</Text>
                   <Text style={styles.breakdownValue}>{money(f.suppliersPaid)}</Text>
                 </View>
                 <View style={[styles.breakdownItem, styles.breakdownItemCash]}>
-                  <Text style={styles.breakdownLabelCash}>{lang === 'hi' ? 'साइट का शुद्ध कैश (Net Cash in Hand)' : 'Net Cash In Hand (This Site)'}</Text>
+                  <Text style={styles.breakdownLabelCash}>Net Cash In Hand</Text>
                   <Text style={[styles.breakdownValueCash, { color: f.cash >= 0 ? '#16A34A' : '#DC2626' }]}>
                     {money(f.cash)}
                   </Text>
@@ -1607,73 +1642,53 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
   },
-  matrixGrid: {
+  specsLedgerList: {
+    paddingTop: 4,
+  },
+  specsLedgerRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    gap: 16,
   },
-  matrixCell: {
-    width: '47%',
-    gap: 3,
+  specsLedgerRowLast: {
+    borderBottomWidth: 0,
   },
-  matrixCellDesktop: {
-    width: '22.5%',
+  specsLedgerLabelCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    width: 95,
+    flexShrink: 0,
   },
-  matrixLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  matrixValue: {
+  specsLedgerLabelText: {
     fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  specsLedgerValueText: {
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+    textAlign: 'left',
+    flex: 1,
   },
-  matrixValueMuted: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  matrixPhonePressable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  matrixPhoneValue: {
-    fontSize: 13,
+  specsLedgerPhoneText: {
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#16A34A',
+    textAlign: 'left',
   },
-  gstMatrixRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  gstMatrixLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#166534',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  gstMatrixCode: {
-    fontSize: 12,
+  specsLedgerGstText: {
+    fontSize: 12.5,
     fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
     fontWeight: '700',
     color: '#14532D',
-  },
-  gstMatrixState: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#15803D',
+    textAlign: 'left',
+    flex: 1,
   },
   termsBox: {
     backgroundColor: '#F8FAFC',
